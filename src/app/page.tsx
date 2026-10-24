@@ -1,0 +1,8 @@
+import { Dashboard } from "@presentation/components/dashboard";
+import { getSession } from "@lib/auth";
+import { redirect } from "next/navigation";
+
+export default async function HomePage() {
+  if (!(await getSession())) redirect("/login");
+  return <Dashboard />;
+}

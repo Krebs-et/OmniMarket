@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: omnimarket-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5434:5432"
+    environment:
+      POSTGRES_USER: omnimarket
+      POSTGRES_PASSWORD: omnimarket_dev
+      POSTGRES_DB: omnimarket
+    volumes:
+      - omnimarket_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  omnimarket_postgres_data:
