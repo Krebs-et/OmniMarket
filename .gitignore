@@ -3,7 +3,8 @@ node_modules
 .env
 .env.local
 coverage
-drizzle/meta
+drizzle/meta/*
+!drizzle/meta/_journal.json
 playwright-report
 test-results
 plan_de_acci_n_y_arquitectura_omnimarket_operations_hub.md
