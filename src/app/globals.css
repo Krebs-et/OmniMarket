@@ -102,10 +102,14 @@ h1 { font-size: clamp(24px, 2.4vw, 30px); letter-spacing: -0.035em; line-height:
 .subheading { color: var(--muted); font-size: 15px; margin-top: 8px; }
 
 .alert { align-items: center; border-radius: var(--radius-sm); display: flex; font-size: 14px; gap: 10px; margin-bottom: 20px; padding: 12px 14px; }
-.low-stock-alert { background: #fff6e5; color: #774900; flex-wrap: wrap; }
-.low-stock-alert .icon { flex: 0 0 18px; }
-.low-stock-alert .secondary-button { margin-left: auto; }
-.alert button { background: transparent; border: 0; border-radius: 6px; color: inherit; font-size: 20px; height: 32px; line-height: 1; margin-left: auto; width: 32px; }
+.low-stock-alert { align-items: center; background: #fff8e9; border: 1px solid #f0d9a9; border-left: 4px solid #c88616; border-radius: var(--radius-md); color: #65440c; gap: 14px; min-height: 76px; padding: 14px 16px; }
+.low-stock-alert > .icon { background: #ffedc6; border-radius: 10px; color: #9b6508; flex: 0 0 40px; height: 40px; padding: 10px; width: 40px; }
+.low-stock-copy { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.low-stock-copy > strong { color: #573a08; font-size: 14px; }
+.low-stock-copy > span { color: #735719; font-size: 13px; line-height: 1.45; }
+.low-stock-copy > span strong { font-weight: 700; }
+.low-stock-alert .secondary-button { flex: 0 0 auto; margin-left: auto; }
+.alert > button:not(.secondary-button) { background: transparent; border: 0; border-radius: 6px; color: inherit; font-size: 20px; height: 32px; line-height: 1; margin-left: auto; width: 32px; }
 .error { background: var(--danger-soft); color: var(--danger); }
 .success { background: var(--success-soft); color: var(--success); }
 
@@ -356,6 +360,9 @@ h2 { font-size: 19px; letter-spacing: -0.02em; }
   .toolbar-count { margin-left: 0; }
   .login-panel { padding: 28px 20px; }
   .bulk-toolbar > * { flex: 1 1 100%; }
+  .low-stock-alert { align-items: flex-start; flex-wrap: wrap; gap: 10px 12px; }
+  .low-stock-alert > .icon { flex-basis: 36px; height: 36px; width: 36px; }
+  .low-stock-alert .secondary-button { flex: 1 1 calc(100% - 48px); margin-left: 48px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

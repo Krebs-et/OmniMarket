@@ -63,7 +63,10 @@ export function ProductsView() {
     <Alerts error={error} notice={notice} onClearError={() => setError(null)} onClearNotice={clearNotice} />
     {Boolean(data?.lowStockTotal) && <div className="alert low-stock-alert" role="status">
       <Icon name="warning" />
-      <span>{data?.lowStockTotal} {data?.lowStockTotal === 1 ? "producto requiere" : "productos requieren"} reposición por estar en su umbral de bajo stock.</span>
+      <span className="low-stock-copy">
+        <strong>Atención: inventario bajo</strong>
+        <span><strong>{data?.lowStockTotal} {data?.lowStockTotal === 1 ? "producto" : "productos"}</strong> están en su umbral de reposición o por debajo.</span>
+      </span>
       <button className="secondary-button" type="button" onClick={() => setLowStockOnly((value) => !value)}>{lowStockOnly ? "Ver todos" : "Revisar stock bajo"}</button>
     </div>}
     <div className="toolbar">
