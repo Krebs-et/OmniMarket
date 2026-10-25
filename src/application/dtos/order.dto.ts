@@ -9,3 +9,21 @@ export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+
+export const createOrderSchema = z.object({
+  customerName: z.string().trim().min(2).max(120),
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.coerce.number().int().min(1).max(1000),
+  })).min(1).max(50).superRefine((items, context) => {
+    const productIds = new Set(items.map((item) => item.productId));
+    if (productIds.size !== items.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Each product can only appear once per order",
+      });
+    }
+  }),
+});
+
+export type CreateOrderInput = z.infer<typeof createOrderSchema>;

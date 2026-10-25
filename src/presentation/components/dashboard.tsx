@@ -13,6 +13,7 @@ type Order = {
   total: string;
   updatedAt: string;
 };
+type Product = { id: string; name: string; price: string; stock: number };
 
 type Analytics = { totalOrders: number; totalSales: number; averageTicket: number; margin: number; netProfit: number };
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -21,6 +22,7 @@ const statusColors: Record<OrderStatus, string> = { PENDING: "status-pending", C
 
 export function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,10 +30,11 @@ export function Dashboard() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
 
   async function loadData() {
-    const [ordersResponse, analyticsResponse] = await Promise.all([fetch("/api/orders"), fetch("/api/analytics")]);
-    if (!ordersResponse.ok || !analyticsResponse.ok) throw new Error("No se pudieron cargar los datos.");
+    const [ordersResponse, analyticsResponse, productsResponse] = await Promise.all([fetch("/api/orders"), fetch("/api/analytics"), fetch("/api/products")]);
+    if (!ordersResponse.ok || !analyticsResponse.ok || !productsResponse.ok) throw new Error("No se pudieron cargar los datos.");
     setOrders(await ordersResponse.json());
     setAnalytics(await analyticsResponse.json());
+    setProducts(await productsResponse.json());
   }
 
   useEffect(() => { loadData().catch(() => setError("No se pudieron cargar los datos. Verifica la conexión con PostgreSQL.")); }, []);
@@ -102,6 +105,11 @@ export function Dashboard() {
             <Kpi icon="chart" label="Margen operativo" value={analytics ? `${analytics.margin.toFixed(1)}%` : "—"} trend="2.1%" tone="green" />
           </section>
           <section className="section-heading" id="orders"><div><h2>Flujo de pedidos</h2><p>Arrastra una tarjeta para actualizar su estado.</p></div><div className="completion"><div className="progress-track"><span style={{ width: `${completedPercent}%` }} /></div><strong>{completedPercent}%</strong><span>completados</span></div></section>
+          <CreateOrderForm products={products} onCreated={(order) => {
+            setOrders((current) => [order, ...current]);
+            void loadData();
+            setNotice(`${order.orderNumber} creado correctamente.`);
+          }} onError={setError} />
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveOrder(null)}>
             <section className="board" aria-label="Tablero Kanban de pedidos">
               {ORDER_STATUSES.map((status) => <KanbanColumn key={status} status={status} orders={orders.filter((order) => order.status === status)} />)}
@@ -112,6 +120,48 @@ export function Dashboard() {
       </main>
     </div>
   );
+}
+
+function CreateOrderForm({ products, onCreated, onError }: { products: Product[]; onCreated: (order: Order) => void; onError: (message: string) => void }) {
+  const [customerName, setCustomerName] = useState("");
+  const [items, setItems] = useState([{ productId: "", quantity: "1" }]);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    onError("");
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerName, items: items.map((item) => ({ productId: item.productId, quantity: Number(item.quantity) })) }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo crear el pedido.");
+      }
+      onCreated(await response.json());
+      setCustomerName("");
+      setItems([{ productId: "", quantity: "1" }]);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "No se pudo crear el pedido.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return <form className="create-order-form" onSubmit={submit}>
+    <div><h2>Nuevo pedido</h2><p>Registra un pedido con uno o más productos.</p></div>
+    <label>Cliente<input required minLength={2} maxLength={120} value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre del cliente" /></label>
+    <div className="order-lines">{items.map((item, index) => <div className="order-line" key={index}>
+      <label>Producto<select required aria-label={`Producto ${index + 1}`} value={item.productId} onChange={(event) => setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, productId: event.target.value } : line))}><option value="">Selecciona un producto</option>{products.filter((product) => !items.some((line, lineIndex) => lineIndex !== index && line.productId === product.id)).map((product) => <option key={product.id} value={product.id}>{product.name} · {money.format(Number(product.price))} · stock {product.stock}</option>)}</select></label>
+      <label>Cantidad<input required aria-label={`Cantidad ${index + 1}`} type="number" min="1" max="1000" value={item.quantity} onChange={(event) => setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, quantity: event.target.value } : line))} /></label>
+      {items.length > 1 && <button className="remove-line" type="button" aria-label={`Eliminar producto ${index + 1}`} onClick={() => setItems((current) => current.filter((_, lineIndex) => lineIndex !== index))}>×</button>}
+    </div>)}</div>
+    <button className="secondary-button add-line" type="button" disabled={items.length >= products.length} onClick={() => setItems((current) => [...current, { productId: "", quantity: "1" }])}>+ Producto</button>
+    <button className="primary-button" type="submit" disabled={submitting || products.length === 0}>{submitting ? "Guardando…" : "Crear pedido"}</button>
+  </form>;
 }
 
 function KanbanColumn({ status, orders }: { status: OrderStatus; orders: Order[] }) {

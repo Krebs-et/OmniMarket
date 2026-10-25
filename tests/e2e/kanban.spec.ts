@@ -15,6 +15,8 @@ test("moves an order between Kanban columns and persists the status", async ({ p
   await expect(card).toBeVisible();
   const orderNumber = await card.locator(".order-number").innerText();
 
+  await card.scrollIntoViewIfNeeded();
+  await processingColumn.scrollIntoViewIfNeeded();
   const cardBox = await card.boundingBox();
   const processingBox = await processingColumn.boundingBox();
   if (!cardBox || !processingBox) throw new Error("Kanban drag targets are not visible");
@@ -35,4 +37,15 @@ test("rejects unauthenticated API access", async ({ request }) => {
   const response = await request.get("/api/orders");
   expect(response.status()).toBe(401);
   await expect(response.json()).resolves.toEqual({ error: "Authentication required" });
+});
+
+test("creates an order from the catalog", async ({ page }) => {
+  await login(page);
+  await page.getByRole("textbox", { name: "Cliente" }).fill("Cliente E2E");
+  await page.getByLabel("Producto 1").selectOption({ index: 1 });
+  await page.getByRole("spinbutton", { name: "Cantidad 1" }).fill("2");
+  await page.getByRole("button", { name: "Crear pedido" }).click();
+
+  await expect(page.locator(".alert.success")).toContainText("creado correctamente");
+  await expect(page.locator(".order-card").filter({ hasText: "Cliente E2E" })).toBeVisible();
 });

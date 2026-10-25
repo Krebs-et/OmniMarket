@@ -1,12 +1,13 @@
 # OmniMarket Operations Hub
 
-MVP local del dashboard operativo. La aplicación usa Next.js y PostgreSQL mediante Drizzle ORM. La configuración no depende de un proveedor de hosting: puede ejecutarse localmente y desplegarse posteriormente en Vercel, Railway o una arquitectura AWS compatible con PostgreSQL.
+MVP local del dashboard operativo. La aplicación usa Next.js y PostgreSQL mediante Drizzle ORM. La configuración no depende de un proveedor de hosting: puede ejecutarse localmente y desplegarse posteriormente en Vercel, Railway o una arquitectura AWS compatible con PostgreSQL. El modelo Sprint 2 añade catálogo (`products`) y líneas de pedido (`order_items`).
 
 ## Requisitos
 
 - Node.js 20+
 - pnpm 9+
 - Docker y Docker Compose
+- Tailwind CSS 3
 
 ## Ejecución local
 
@@ -31,6 +32,8 @@ Contraseña: omnimarket
 
 El dashboard protege la sesión con una cookie HttpOnly firmada. El tablero Kanban permite arrastrar tarjetas con mouse, touch o teclado; al soltar, el cambio se persiste mediante `PATCH /api/orders/:id/status` y se revierte si la API falla.
 
+El formulario **Nuevo pedido** crea pedidos desde el catálogo mediante `POST /api/orders`. Permite varias líneas sin repetir productos. El payload se valida con Zod y el pedido, sus líneas y el decremento de inventario se persisten en una única transacción; los precios y costos se toman del catálogo en el servidor. Si no existe stock suficiente, la operación responde `409` y no modifica la base.
+
 ## Validación
 
 ```bash
@@ -41,6 +44,30 @@ pnpm build
 ```
 
 `pnpm test` ejecuta las pruebas unitarias sin dependencias externas. `pnpm test:integration` requiere PostgreSQL activo, migrado y con datos seed. `pnpm test:e2e` levanta automáticamente el servidor Next.js y genera `playwright-report/` y artefactos de fallo en `test-results/`.
+
+La UI utiliza Tailwind CSS como pipeline de estilos (`tailwind.config.ts`, `postcss.config.mjs` y `@tailwind` en `src/app/globals.css`). Las clases semánticas existentes se mantienen durante la migración visual para preservar la experiencia del MVP.
+
+### Catálogo y migraciones
+
+El esquema incluye `products` y `order_items`, con índices para consultar pedidos por estado/fecha y líneas por pedido/producto. `GET /api/products` requiere una sesión autenticada y devuelve el catálogo ordenado por nombre.
+
+`POST /api/orders` requiere sesión y acepta:
+
+```json
+{
+  "customerName": "Cliente Demo",
+  "items": [{ "productId": "uuid-del-producto", "quantity": 2 }]
+}
+```
+
+El stock se descuenta con una actualización condicionada (`stock >= quantity`) para evitar inventario negativo bajo solicitudes concurrentes.
+
+Después de actualizar una base existente, aplica la nueva migración antes de ejecutar el seed:
+
+```bash
+pnpm db:migrate:deploy
+pnpm db:seed
+```
 
 ## Primer despliegue en Vercel
 
