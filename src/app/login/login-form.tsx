@@ -12,11 +12,11 @@ function ProviderIcon({ id }: { id: string }) {
   return null;
 }
 
-export function LoginForm({ providers, demoLoginEnabled }: { providers: OAuthProvider[]; demoLoginEnabled: boolean }) {
+export function LoginForm({ providers, demoLoginEnabled, initialError }: { providers: OAuthProvider[]; demoLoginEnabled: boolean; initialError?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("demo@omnimarket.local");
   const [password, setPassword] = useState("omnimarket");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError ?? "");
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {

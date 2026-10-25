@@ -64,6 +64,20 @@ describe("API observability", () => {
     });
   });
 
+  it("decorates redirects with immutable headers without changing the redirect", async () => {
+    const location = "https://example.test/login?error=OAuthAccountNotLinked";
+    const handler = withApiObservability("GET", "/api/auth/[...nextauth]", async () =>
+      Response.redirect(location));
+
+    const response = await handler(new Request("https://example.test/api/auth/callback"));
+    await deferred.callbacks[0]();
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(location);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    expect(response.headers.get("server-timing")).toMatch(/^app;dur=/);
+  });
+
   it("marks requests at or above one second as slow", async () => {
     vi.spyOn(performance, "now").mockReturnValueOnce(10).mockReturnValueOnce(1010);
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});

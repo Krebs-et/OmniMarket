@@ -77,10 +77,15 @@ export function withApiObservability<TRequest extends Request, TArgs extends unk
         outcome,
       });
       scheduleApiMetric(method, route, response.status, durationMs);
-      response.headers.set("X-Request-Id", requestId);
-      const priorTiming = response.headers.get("Server-Timing");
-      response.headers.set("Server-Timing", [priorTiming, `app;dur=${durationMs}`].filter(Boolean).join(", "));
-      return response;
+      const headers = new Headers(response.headers);
+      headers.set("X-Request-Id", requestId);
+      const priorTiming = headers.get("Server-Timing");
+      headers.set("Server-Timing", [priorTiming, `app;dur=${durationMs}`].filter(Boolean).join(", "));
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
     } catch (error) {
       const durationMs = Number((performance.now() - startedAt).toFixed(2));
       logApiRequest({

@@ -6,6 +6,11 @@ test("redirects unauthenticated visitors to login", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Bienvenido de nuevo" })).toBeVisible();
 });
 
+test("explains why OAuth accounts with the same email are not linked automatically", async ({ page }) => {
+  await page.goto("/login?error=OAuthAccountNotLinked");
+  await expect(page.locator(".form-error")).toContainText("las cuentas no se enlazan automáticamente");
+});
+
 test("logs in and renders the operations dashboard", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Correo electrónico").fill("demo@omnimarket.local");
