@@ -5,6 +5,7 @@ describe("API security policy", () => {
   it("recognizes the implemented application and Auth.js routes", () => {
     expect(isKnownApiPath("/api/orders")).toBe(true);
     expect(isKnownApiPath("/api/orders/7fda3e1a-9b61-48bd-a0e8-d540f71894de/history")).toBe(true);
+    expect(isKnownApiPath("/api/orders/status")).toBe(true);
     expect(isKnownApiPath("/api/auth/callback/google")).toBe(true);
   });
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createOrderSchema, paginationSchema } from "@application/dtos/order.dto";
+import { createOrderSchema, listOrdersQuerySchema } from "@application/dtos/order.dto";
 import { createOrder, InsufficientStockError, ProductNotFoundError } from "@application/use-cases/create-order";
 import { getOrders } from "@application/use-cases/get-orders";
 import { getSession } from "@lib/auth";
@@ -13,16 +13,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   const { searchParams } = new URL(request.url);
-  const parsed = paginationSchema.safeParse({
-    page: searchParams.get("page") ?? undefined,
-    limit: searchParams.get("limit") ?? undefined,
-  });
+  const parsed = listOrdersQuerySchema.safeParse(Object.fromEntries(
+    ["page", "limit", "status", "q", "sort", "dir"].map((key) => [key, searchParams.get(key) || undefined]),
+  ));
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid pagination parameters" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid query parameters" }, { status: 400 });
   }
 
-  return NextResponse.json(await getOrders(parsed.data.page, parsed.data.limit));
+  return NextResponse.json(await getOrders(parsed.data));
 }
 
 export async function POST(request: Request) {

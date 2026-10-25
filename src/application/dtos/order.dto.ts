@@ -10,6 +10,23 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+export const listOrdersQuerySchema = paginationSchema.extend({
+  status: z.enum(ORDER_STATUSES).optional(),
+  q: z.string().trim().max(100).optional(),
+  sort: z.enum(["created", "total", "customer"]).default("created"),
+  dir: z.enum(["asc", "desc"]).default("desc"),
+});
+
+export const bulkUpdateStatusSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, "Duplicate order ids"),
+  status: z.enum(ORDER_STATUSES),
+});
+
+export const productSearchSchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 export const createOrderSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
   items: z.array(z.object({

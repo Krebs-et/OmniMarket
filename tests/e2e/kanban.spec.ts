@@ -4,10 +4,24 @@ async function login(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Entrar al dashboard" }).click();
   await expect(page).toHaveURL(/\/$/);
+  await page.goto("/orders");
+  await expect(page.locator(".order-card").first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Tablero Kanban de pedidos" })).toHaveAttribute("aria-busy", "false", { timeout: 25000 });
+}
+
+async function createPendingOrder(page: Page) {
+  const products = (await (await page.request.get("/api/products?limit=50")).json()).filter((product: { stock: number }) => product.stock > 5);
+  const response = await page.request.post("/api/orders", { data: { customerName: `Pendiente E2E ${Date.now()}`, items: [{ productId: products[0].id, quantity: 1 }] } });
+  expect(response.ok(), await response.text()).toBe(true);
 }
 
 test("moves an order between Kanban columns and persists the status", async ({ page }) => {
-  await login(page);
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Entrar al dashboard" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await createPendingOrder(page);
+  await page.goto("/orders");
+  await expect(page.getByRole("region", { name: "Tablero Kanban de pedidos" })).toHaveAttribute("aria-busy", "false", { timeout: 25000 });
 
   const pendingColumn = page.locator(".kanban-column").nth(0);
   const processingColumn = page.locator(".kanban-column").nth(2);
@@ -30,7 +44,8 @@ test("moves an order between Kanban columns and persists the status", async ({ p
   await expect(processingColumn.locator(".order-card").filter({ hasText: orderNumber })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "En proceso" }).locator("..").locator("..").locator(".order-card").filter({ hasText: orderNumber })).toBeVisible();
+  await page.getByLabel("Buscar pedidos").fill(orderNumber);
+  await expect(page.locator(".kanban-column").nth(2).locator(".order-card").filter({ hasText: orderNumber })).toBeVisible();
 });
 
 test("rejects unauthenticated API access", async ({ request }) => {
@@ -44,11 +59,14 @@ test("creates an order from the catalog", async ({ page }) => {
   const customerName = `Cliente E2E ${Date.now()}`;
   await page.getByRole("button", { name: "Nuevo pedido" }).click();
   await page.getByRole("textbox", { name: "Cliente" }).fill(customerName);
-  await page.getByLabel("Producto 1").selectOption({ index: 1 });
+  await page.getByRole("combobox").click();
+  await page.getByRole("option").locator("button:enabled").first().click();
   await page.getByRole("spinbutton", { name: "Cantidad 1" }).fill("2");
+  await expect(page.getByLabel("Total del pedido")).not.toHaveText("$0");
   await page.getByRole("button", { name: "Crear pedido" }).click();
 
   await expect(page.locator(".alert.success")).toContainText("creado correctamente");
+  await page.getByLabel("Buscar pedidos").fill(customerName);
   await expect(page.locator(".order-card").filter({ hasText: customerName })).toBeVisible();
 });
 
@@ -77,4 +95,34 @@ test("opens order activity history", async ({ page }) => {
   await expect(panel).toBeVisible();
   await expect(panel).toContainText("En proceso");
   await expect(panel).toContainText("demo@omnimarket.local");
+});
+
+test("searches, switches to the table, sorts and paginates", async ({ page }) => {
+  await login(page);
+  await page.getByRole("tab", { name: "Tabla" }).click();
+  const rows = page.locator(".orders-table tbody tr");
+  await expect(rows.first()).toBeVisible();
+  await page.getByRole("button", { name: /^Total/ }).click();
+  await expect(page.getByRole("columnheader", { name: /Total/ })).toHaveAttribute("aria-sort", "descending");
+  await page.getByLabel("Filtrar por estado").selectOption("CONFIRMED");
+  await expect(rows.first().locator(".status-chip")).toHaveText("Confirmado");
+  await page.getByLabel("Buscar pedidos").fill("OM-1001");
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator(".pagination")).toContainText("1 pedidos");
+});
+
+test("adds many product lines to one order and shows a live total", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: "Nuevo pedido" }).click();
+  const search = page.getByRole("combobox");
+  for (let index = 0; index < 3; index += 1) {
+    await search.click();
+    await page.getByRole("option").locator("button:enabled").nth(index).click();
+  }
+  await expect(page.locator(".order-line")).toHaveCount(3);
+  await page.getByRole("spinbutton", { name: "Cantidad 1" }).fill("5000");
+  await expect(page.getByRole("spinbutton", { name: "Cantidad 1" })).toHaveValue("1000");
+  await expect(page.getByText("Excede el stock disponible").first()).toBeVisible();
+  await page.getByRole("button", { name: "Eliminar producto 3" }).click();
+  await expect(page.locator(".order-line")).toHaveCount(2);
 });

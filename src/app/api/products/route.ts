@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { productSearchSchema } from "@application/dtos/order.dto";
 import { getProducts } from "@application/use-cases/get-products";
 import { getSession } from "@lib/auth";
 import { recordAuthenticationFailure } from "@lib/security";
@@ -11,5 +12,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
-  return NextResponse.json(await getProducts());
+  const { searchParams } = new URL(request.url);
+  const parsed = productSearchSchema.safeParse({ q: searchParams.get("q") || undefined, limit: searchParams.get("limit") || undefined });
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid query parameters" }, { status: 400 });
+  }
+
+  return NextResponse.json(await getProducts(parsed.data));
 }

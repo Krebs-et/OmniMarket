@@ -65,8 +65,8 @@ describe("orders and analytics integration", () => {
   });
 
   it("reads paginated orders from PostgreSQL", async () => {
-    const result = await getOrders(1, 10);
-    expect(result.some((order) => order.orderNumber === integrationOrder.orderNumber)).toBe(true);
+    const result = await getOrders({ page: 1, limit: 10 });
+    expect(result.items.some((order) => order.orderNumber === integrationOrder.orderNumber)).toBe(true);
   });
 
   it("persists a status update and exposes it in analytics", async () => {

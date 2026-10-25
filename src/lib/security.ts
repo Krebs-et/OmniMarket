@@ -27,6 +27,7 @@ export function getClientIp(request: Pick<NextRequest, "headers">) {
 
 export function isKnownApiPath(pathname: string) {
   return pathname === "/api/orders"
+    || pathname === "/api/orders/status"
     || pathname === "/api/analytics"
     || pathname === "/api/products"
     || pathname === "/api/health"

@@ -15,5 +15,5 @@ test("logs in and renders the operations dashboard", async ({ page }) => {
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "Centro de operaciones" })).toBeVisible();
   await expect(page.getByText("Pedidos totales")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Tablero Kanban de pedidos" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Pedidos recientes" })).toBeVisible();
 });
