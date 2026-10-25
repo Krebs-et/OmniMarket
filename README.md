@@ -43,7 +43,7 @@ pnpm test:e2e
 pnpm build
 ```
 
-`pnpm test` ejecuta las pruebas unitarias sin dependencias externas. `pnpm test:integration` requiere PostgreSQL activo, migrado y con datos seed. `pnpm test:e2e` levanta automáticamente el servidor Next.js y genera `playwright-report/` y artefactos de fallo en `test-results/`.
+`pnpm test` ejecuta las pruebas unitarias sin dependencias externas. `pnpm test:integration` requiere PostgreSQL activo y migrado; las pruebas crean sus propios fixtures. El job de CI también ejecuta seed para validar el conjunto demo en PostgreSQL efímero. `pnpm test:e2e` levanta automáticamente el servidor Next.js y genera `playwright-report/` y artefactos de fallo en `test-results/`.
 
 La UI utiliza Tailwind CSS como pipeline de estilos (`tailwind.config.ts`, `postcss.config.mjs` y `@tailwind` en `src/app/globals.css`). Las clases semánticas existentes se mantienen durante la migración visual para preservar la experiencia del MVP.
 
@@ -113,7 +113,7 @@ pnpm install --frozen-lockfile
 pnpm db:migrate:deploy
 ```
 
-El seed está pensado para local:
+El seed es destructivo y está pensado para local o para PostgreSQL efímero de CI:
 
 ```bash
 pnpm db:seed

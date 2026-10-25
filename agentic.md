@@ -67,7 +67,9 @@ Las rutas existentes son:
 
 ```text
 GET    /api/orders
+POST   /api/orders
 PATCH  /api/orders/:id/status
+GET    /api/orders/:id/history
 GET    /api/analytics
 GET    /api/products
 GET    /api/health
@@ -90,11 +92,11 @@ Si un cambio modifica stack, comandos, rutas, variables, arquitectura, criterios
 
 ## 7. CI/CD
 
-GitHub Actions ejecuta tres gates:
+GitHub Actions ejecuta tres gates y valida que cada migración SQL esté referenciada por el journal antes de migrar:
 
 1. `quality`: instalación reproducible, ESLint, TypeScript, unitarias y build.
-2. `integration`: PostgreSQL 16 efímero, migración y pruebas de integración.
-3. `e2e`: PostgreSQL efímero, migración, seed, Chromium y flujos Playwright.
+2. `integration`: PostgreSQL 16 efímero, verificación de metadatos Drizzle, migración, seed y pruebas de integración con fixtures propios.
+3. `e2e`: PostgreSQL efímero, verificación de metadatos Drizzle, migración, seed, Chromium y flujos Playwright.
 
 Los reportes Playwright se publican como artefactos cuando el job termina. Vercel sólo debe desplegar una revisión que haya pasado estos gates.
 
@@ -115,7 +117,7 @@ La primera entrega del Sprint 2 incorpora:
 
 Las migraciones se ejecutan explícitamente con `pnpm db:migrate:deploy`; el build y Vercel no modifican el esquema. El seed sigue siendo destructivo y sólo debe ejecutarse contra una base local o efímera conocida.
 
-Auth.js/OAuth, CSP, rate limiting, Redis, creación de pedidos desde la UI y observabilidad quedan como incrementos posteriores del Sprint 2. No se deben simular como implementados.
+Auth.js/OAuth, CSP, rate limiting, Redis, vistas de skeleton, edición masiva y observabilidad quedan como incrementos posteriores del Sprint 2. No se deben simular como implementados.
 
 ## 9. Evolución
 

@@ -60,7 +60,12 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify Drizzle migration metadata
+        run: |
+          test -s drizzle/meta/_journal.json || { echo "::error::Missing drizzle/meta/_journal.json; commit Drizzle migration metadata."; exit 1; }
+          node -e "const fs=require('node:fs'); const path=require('node:path'); const journal=JSON.parse(fs.readFileSync('drizzle/meta/_journal.json','utf8')); if (!Array.isArray(journal.entries) || journal.entries.length === 0) throw new Error('Drizzle migration journal has no entries'); for (const entry of journal.entries) { if (!fs.existsSync(path.join('drizzle', entry.tag + '.sql'))) throw new Error('Missing Drizzle migration SQL: ' + entry.tag); }"
       - run: pnpm db:migrate:deploy
+      - run: pnpm db:seed
       - run: pnpm test:integration
 
   e2e:
@@ -96,6 +101,10 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify Drizzle migration metadata
+        run: |
+          test -s drizzle/meta/_journal.json || { echo "::error::Missing drizzle/meta/_journal.json; commit Drizzle migration metadata."; exit 1; }
+          node -e "const fs=require('node:fs'); const path=require('node:path'); const journal=JSON.parse(fs.readFileSync('drizzle/meta/_journal.json','utf8')); if (!Array.isArray(journal.entries) || journal.entries.length === 0) throw new Error('Drizzle migration journal has no entries'); for (const entry of journal.entries) { if (!fs.existsSync(path.join('drizzle', entry.tag + '.sql'))) throw new Error('Missing Drizzle migration SQL: ' + entry.tag); }"
       - run: pnpm db:migrate:deploy
       - run: pnpm db:seed
       - run: pnpm exec playwright install --with-deps chromium

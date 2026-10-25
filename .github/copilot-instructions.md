@@ -26,7 +26,7 @@ These instructions are the source of truth for agent-assisted development in thi
 
 - Never print, commit, or paste `DATABASE_URL`, `AUTH_SECRET`, passwords, or cookies.
 - Never use production RDS for destructive tests, seed, or reset operations.
-- Use an isolated PostgreSQL service/container for CI integration tests.
+- Use an isolated PostgreSQL service/container for CI integration tests. CI verifies that Drizzle journal/SQL migration files are present, then migrates and seeds only the ephemeral integration database. Integration tests must still create their own required fixtures.
 - Keep `sslmode=require` for remote PostgreSQL connections and `DB_POOL_MAX=1` for serverless deployments unless measured evidence justifies a change.
 - Do not add `/api/test/*` routes without an explicit threat model and production guard.
 
@@ -43,9 +43,9 @@ pnpm test:e2e
 pnpm build
 ```
 
-Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/history`, `GET /api/analytics`, `GET /api/products`, `/api/health`, `/api/auth/login`, and `/api/auth/logout`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Cancelling eligible orders restores stock transactionally and idempotently; shipped or delivered orders cannot be cancelled. Real status transitions are audited with actor and timestamp, and the dashboard exposes the selected order's activity panel. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
+Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/history`, `GET /api/analytics`, `GET /api/products`, `GET /api/health`, `POST /api/auth/login`, and `POST /api/auth/logout`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Cancelling eligible orders restores stock transactionally and idempotently; shipped or delivered orders cannot be cancelled. Real status transitions are audited with actor and timestamp, and the dashboard exposes the selected order's activity panel. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
 
-The project currently has 4 unit tests, 2 integration tests, and 4 E2E tests. Do not claim a test count or latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, and percentile.
+The project currently has 4 unit tests, 9 integration tests, and 6 E2E tests. Do not claim a test count or latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, and percentile.
 
 ## Change protocol
 
