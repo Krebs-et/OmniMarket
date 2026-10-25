@@ -151,3 +151,7 @@ La respuesta esperada es:
 ```
 
 Los secretos deben configurarse únicamente en Vercel, AWS Secrets Manager o el proveedor elegido; nunca deben subirse al repositorio.
+
+## Despliegue y verificación en producción
+
+Vercel despliega desde Git. El flujo [`deploy.yml`](./.github/workflows/deploy.yml) se ejecuta cuando CI termina con éxito en `main` (o manualmente): aplica `pnpm db:migrate:deploy` a RDS y corre una verificación de humo de sólo lectura (`/api/health` 200, `/login` 200, `/api/orders` 401, `/api/nope` 404, cabeceras CSP y `X-RateLimit-*`). Requiere el secreto `PRODUCTION_DATABASE_URL` (entorno `production`, con `sslmode=require`), RDS accesible desde los runners de GitHub y, opcionalmente, la variable `PRODUCTION_URL`. Nunca ejecuta seed. Producción requiere `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`; sin ellos toda `/api/*` responde 503. El middleware vive en `src/middleware.ts`.

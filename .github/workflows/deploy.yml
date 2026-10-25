@@ -1,0 +1,68 @@
+name: OmniMarket Deploy
+
+# Vercel despliega por su integración con Git. Este flujo corre solo cuando CI
+# pasa en main: aplica migraciones a RDS y ejecuta una verificación de humo de solo lectura.
+on:
+  workflow_run:
+    workflows: ["OmniMarket CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate RDS
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply Drizzle migrations
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+  smoke:
+    name: Production smoke test
+    needs: migrate
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ vars.PRODUCTION_URL || 'https://omni-market-six.vercel.app' }}
+    steps:
+      - name: Wait for Vercel and check endpoints
+        run: |
+          expect() {
+            local path="$1" want="$2" code
+            for i in 1 2 3 4 5 6; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$path")
+              [ "$code" = "$want" ] && { echo "ok $path -> $code"; return 0; }
+              sleep 20
+            done
+            echo "::error::$path returned $code, expected $want"; return 1
+          }
+          expect /api/health 200
+          expect /login 200
+          expect /api/orders 401
+          expect /api/nope 404
+      - name: Check security headers and rate limiting
+        run: |
+          headers=$(curl -s -D - -o /dev/null "$BASE_URL/api/orders")
+          echo "$headers" | grep -qi '^x-ratelimit-limit' || { echo "::error::Rate limiting headers missing"; exit 1; }
+          echo "$headers" | grep -qi '^content-security-policy' || { echo "::error::CSP missing"; exit 1; }
