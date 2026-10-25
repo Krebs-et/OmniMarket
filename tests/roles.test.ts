@@ -3,9 +3,11 @@ import { can, parseRole } from "../src/domain/value-objects/role";
 
 describe("role permissions", () => {
   it("grants admins every permission", () => {
-    for (const permission of ["orders:read", "orders:write", "catalog:read", "catalog:write"] as const) {
+    for (const permission of ["orders:read", "orders:write", "catalog:read", "catalog:write", "observability:read"] as const) {
       expect(can("admin", permission)).toBe(true);
     }
+    expect(can("operator", "observability:read")).toBe(false);
+    expect(can("viewer", "observability:read")).toBe(false);
   });
 
   it("lets operators manage orders but not the catalog", () => {

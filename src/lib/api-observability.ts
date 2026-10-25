@@ -1,3 +1,6 @@
+import { recordApiRequestMetric } from "@infrastructure/db/api-request-metrics";
+import { after } from "next/server";
+
 const SLOW_REQUEST_THRESHOLD_MS = 1000;
 
 type ApiLog = {
@@ -17,6 +20,30 @@ function logApiRequest(entry: ApiLog) {
   if (entry.level === "error") console.error(serialized);
   else if (entry.level === "warn") console.warn(serialized);
   else console.info(serialized);
+}
+
+function logMetricFailure(event: string, method: string, route: string, error: unknown) {
+  console.error(JSON.stringify({
+    level: "error",
+    event,
+    method,
+    route,
+    errorType: error instanceof Error ? error.name : "UnknownError",
+  }));
+}
+
+function scheduleApiMetric(method: string, route: string, status: number, durationMs: number) {
+  try {
+    after(async () => {
+      try {
+        await recordApiRequestMetric({ method, route, status, durationMs });
+      } catch (error) {
+        logMetricFailure("api_metrics_persist_failed", method, route, error);
+      }
+    });
+  } catch (error) {
+    logMetricFailure("api_metrics_schedule_failed", method, route, error);
+  }
 }
 
 export function withApiObservability<TRequest extends Request, TArgs extends unknown[]>(
@@ -49,6 +76,7 @@ export function withApiObservability<TRequest extends Request, TArgs extends unk
         durationMs,
         outcome,
       });
+      scheduleApiMetric(method, route, response.status, durationMs);
       response.headers.set("X-Request-Id", requestId);
       const priorTiming = response.headers.get("Server-Timing");
       response.headers.set("Server-Timing", [priorTiming, `app;dur=${durationMs}`].filter(Boolean).join(", "));
@@ -66,6 +94,7 @@ export function withApiObservability<TRequest extends Request, TArgs extends unk
         outcome: "server_error",
         errorType: error instanceof Error ? error.name : "UnknownError",
       });
+      scheduleApiMetric(method, route, 500, durationMs);
       throw error;
     }
   };

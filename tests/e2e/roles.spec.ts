@@ -37,6 +37,22 @@ test("operator manages orders but not the catalog", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Nuevo producto" })).toHaveCount(0);
 });
 
+test("observability is available to admins only", async ({ page }) => {
+  await loginAs(page, "viewer@omnimarket.local");
+  await expect(page.getByRole("link", { name: "Observabilidad" })).toHaveCount(0);
+  await page.goto("/observability");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Centro de operaciones" })).toBeVisible();
+});
+
+test("admin can review aggregate API metrics", async ({ page }) => {
+  await loginAs(page, "demo@omnimarket.local");
+  await expect(page.getByRole("link", { name: "Observabilidad" })).toBeVisible();
+  await page.goto("/observability");
+  await expect(page.getByRole("heading", { name: "Observabilidad" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Rutas API" }).getByRole("table")).toBeVisible();
+});
+
 test("admin creates, adjusts and deactivates a product", async ({ page }) => {
   await loginAs(page, "demo@omnimarket.local");
   const sku = `E2E-${Date.now()}`;

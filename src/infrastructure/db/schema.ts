@@ -8,6 +8,7 @@ import {
   boolean,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -156,8 +157,31 @@ export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one 
   }),
 }));
 
+export const apiRequestMetrics = pgTable("api_request_metrics", {
+  bucketStart: timestamp("bucket_start", { withTimezone: true }).notNull(),
+  method: text("method").notNull(),
+  route: text("route").notNull(),
+  requestCount: integer("request_count").notNull().default(0),
+  clientErrorCount: integer("client_error_count").notNull().default(0),
+  serverErrorCount: integer("server_error_count").notNull().default(0),
+  slowRequestCount: integer("slow_request_count").notNull().default(0),
+  latencyLe50: integer("latency_le_50").notNull().default(0),
+  latencyLe100: integer("latency_le_100").notNull().default(0),
+  latencyLe250: integer("latency_le_250").notNull().default(0),
+  latencyLe500: integer("latency_le_500").notNull().default(0),
+  latencyLe1000: integer("latency_le_1000").notNull().default(0),
+  latencyLe2000: integer("latency_le_2000").notNull().default(0),
+  latencyLe5000: integer("latency_le_5000").notNull().default(0),
+  latencyGt5000: integer("latency_gt_5000").notNull().default(0),
+}, (table) => ({
+  bucketRouteMethodUnique: uniqueIndex("idx_api_request_metrics_bucket_route_method")
+    .on(table.bucketStart, table.route, table.method),
+  bucketStartIdx: index("idx_api_request_metrics_bucket_start").on(table.bucketStart),
+}));
+
 export type Order = typeof orders.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
+export type ApiRequestMetric = typeof apiRequestMetrics.$inferSelect;

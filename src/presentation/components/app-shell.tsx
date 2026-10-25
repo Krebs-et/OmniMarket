@@ -14,6 +14,7 @@ const sections: { href: Route; label: string; icon: string; admin?: boolean }[] 
   { href: "/orders", label: "Pedidos", icon: "layers" },
   { href: "/products", label: "Productos", icon: "box" },
   { href: "/analytics", label: "Analítica", icon: "chart" },
+  { href: "/observability", label: "Observabilidad", icon: "warning", admin: true },
   { href: "/users", label: "Usuarios", icon: "users", admin: true },
 ];
 

@@ -19,7 +19,7 @@ export default defineConfig({
     colorScheme: "light",
   },
   webServer: {
-    command: "pnpm dev",
+    command: "node ./node_modules/next/dist/bin/next dev",
     url: `${baseURL}/login`,
     env: {
       AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-only-secret",

@@ -50,6 +50,13 @@
       "when": 1792956318178,
       "tag": "0006_last_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792963111031,
+      "tag": "0007_spicy_zarek",
+      "breakpoints": true
     }
   ]
 }
