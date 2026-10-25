@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792867832414,
+      "tag": "0000_eminent_leader",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792896658560,
+      "tag": "0001_watery_ma_gnuci",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792899742012,
+      "tag": "0002_exotic_kang",
+      "breakpoints": true
+    }
+  ]
+}
