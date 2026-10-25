@@ -7,7 +7,7 @@ These instructions are the source of truth for agent-assisted development in thi
 ## Stack
 
 - Next.js 14 App Router, React, TypeScript strict mode.
-- Tailwind CSS 3 through `tailwind.config.ts`, `postcss.config.mjs`, and `src/app/globals.css`.
+- Tailwind CSS 3 through `tailwind.config.ts`, `postcss.config.mjs`, and `src/app/globals.css` (design tokens as CSS variables, AA-contrast colors, minimum 12px text, `:focus-visible` states). Fonts load through `next/font`, not CSS `@import`. UI conventions: new-order form is a modal, order activity is a side drawer, sidebar is off-canvas at ≤1100px, no hardcoded/fake metrics in the UI.
 - PostgreSQL with Drizzle ORM and `postgres`; the Sprint 2 model includes OAuth `users/accounts/sessions`, `products`, `orders`, `order_items`, and status history.
 - Auth.js v5 with Google and GitHub OAuth in production; demo login is development-only.
 - Upstash Redis and `@upstash/ratelimit` for production API limits and temporary IP bans.
@@ -48,7 +48,7 @@ pnpm build
 
 Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/history`, `GET /api/analytics`, `GET /api/products`, `GET /api/health`, `POST /api/auth/login`, `POST /api/auth/logout`, and Auth.js `/api/auth/*`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Cancelling eligible orders restores stock transactionally and idempotently; shipped or delivered orders cannot be cancelled. Real status transitions are audited with actor and timestamp, and the dashboard exposes the selected order's activity panel. The Kanban includes loading skeletons and multi-selection with sequential status updates; partial failures are reported per order. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
 
-The project currently has 7 unit tests, 9 integration tests, and 7 E2E tests. OAuth callbacks and Upstash behavior still require deployment credentials for external verification. Do not claim a latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, sample count, and percentile.
+The project currently has 7 unit tests, 9 integration tests, and 11 E2E tests. OAuth callbacks and Upstash behavior still require deployment credentials for external verification. Do not claim a latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, sample count, and percentile.
 
 ## Change protocol
 

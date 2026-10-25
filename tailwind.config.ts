@@ -8,8 +8,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["DM Sans", "sans-serif"],
-        display: ["Manrope", "sans-serif"],
+        sans: ["var(--font-sans)", "DM Sans", "sans-serif"],
+        display: ["var(--font-display)", "Manrope", "sans-serif"],
+      },
+      colors: {
+        ink: "var(--ink)",
+        muted: "var(--muted)",
+        brand: { DEFAULT: "var(--blue)", hover: "var(--blue-hover)", soft: "var(--blue-soft)" },
+        navy: "var(--navy)",
       },
     },
   },

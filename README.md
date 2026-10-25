@@ -47,7 +47,7 @@ pnpm build
 
 `pnpm test` ejecuta las pruebas unitarias sin dependencias externas. `pnpm test:integration` requiere PostgreSQL activo y migrado; las pruebas crean sus propios fixtures. El job de CI también ejecuta seed para validar el conjunto demo en PostgreSQL efímero. `pnpm test:e2e` levanta automáticamente el servidor Next.js y genera `playwright-report/` y artefactos de fallo en `test-results/`.
 
-La UI utiliza Tailwind CSS como pipeline de estilos (`tailwind.config.ts`, `postcss.config.mjs` y `@tailwind` en `src/app/globals.css`). Las clases semánticas existentes se mantienen durante la migración visual para preservar la experiencia del MVP.
+La UI utiliza Tailwind CSS como pipeline de estilos (`tailwind.config.ts`, `postcss.config.mjs` y `@tailwind` en `src/app/globals.css`). `globals.css` define los design tokens (variables CSS con contraste AA) y las clases semánticas del dashboard; las fuentes DM Sans y Manrope se cargan con `next/font`. Distribución responsiva: en ≤1100 px la barra lateral pasa a un menú off-canvas, el formulario de pedido es un modal ("Nuevo pedido"), el historial de actividad es un panel lateral (bottom sheet en móvil) y el Kanban usa scroll horizontal con snap; en touch el arrastre se activa con pulsación larga para no bloquear el scroll. Los indicadores se calculan con datos reales (sin tendencias ficticias).
 
 ### Catálogo y migraciones
 
@@ -77,7 +77,7 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
-La suite actual tiene 7 pruebas unitarias, 9 de integración y 7 E2E. Las pruebas OAuth externas y el rate limiting real requieren configurar proveedores y Upstash; esas dependencias no se verifican localmente sin sus credenciales.
+La suite actual tiene 7 pruebas unitarias, 9 de integración y 11 E2E (incluye verificación de overflow en móvil/tablet/desktop y menú móvil). Las pruebas OAuth externas y el rate limiting real requieren configurar proveedores y Upstash; esas dependencias no se verifican localmente sin sus credenciales.
 
 ## Primer despliegue en Vercel
 

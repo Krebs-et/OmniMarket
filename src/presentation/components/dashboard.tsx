@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, KeyboardSensor, PointerSensor, closestCorners, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, KeyboardSensor, MouseSensor, TouchSensor, closestCorners, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { signOut } from "next-auth/react";
 import { ORDER_STATUSES, type OrderStatus } from "@domain/value-objects/order-status";
@@ -28,7 +28,10 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
 const statusLabels: Record<OrderStatus, string> = { PENDING: "Pendientes", CONFIRMED: "Confirmados", PROCESSING: "En proceso", SHIPPED: "Enviados", DELIVERED: "Entregados", CANCELLED: "Cancelados" };
 const statusColors: Record<OrderStatus, string> = { PENDING: "status-pending", CONFIRMED: "status-confirmed", PROCESSING: "status-processing", SHIPPED: "status-shipped", DELIVERED: "status-delivered", CANCELLED: "status-cancelled" };
 
-export function Dashboard() {
+export function Dashboard({ userEmail }: { userEmail: string }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [today, setToday] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -43,7 +46,28 @@ export function Dashboard() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
   const [bulkStatus, setBulkStatus] = useState<OrderStatus | "">("");
   const [bulkUpdating, setBulkUpdating] = useState(false);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  useEffect(() => {
+    setToday(new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date()));
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   async function loadData() {
     setIsLoading(true);
@@ -177,45 +201,54 @@ export function Dashboard() {
 
   const completedPercent = useMemo(() => analytics && analytics.totalOrders ? Math.round(((orders.filter((order) => order.status === "DELIVERED").length) / analytics.totalOrders) * 100) : 0, [analytics, orders]);
 
+  const initials = userEmail.slice(0, 2).toUpperCase();
+  const closeMenu = () => setMenuOpen(false);
+
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {menuOpen && <div className="sidebar-scrim" onClick={closeMenu} aria-hidden="true" />}
+      <aside className={`sidebar ${menuOpen ? "is-open" : ""}`} id="sidebar">
         <div className="brand"><span className="brand-mark small">O</span><span>OMNIMARKET</span></div>
         <nav className="main-nav" aria-label="Navegación principal">
-          <a className="nav-item active" href="#overview"><Icon name="grid" />Resumen</a>
-          <a className="nav-item" href="#orders"><Icon name="layers" />Pedidos <span className="nav-count">{orders.length}</span></a>
-          <a className="nav-item" href="#analytics"><Icon name="chart" />Analítica</a>
+          <a className="nav-item active" href="#overview" onClick={closeMenu}><Icon name="grid" />Resumen</a>
+          <a className="nav-item" href="#orders" onClick={closeMenu}><Icon name="layers" />Pedidos <span className="nav-count">{orders.length}</span></a>
+          <a className="nav-item" href="#analytics" onClick={closeMenu}><Icon name="chart" />Analítica</a>
         </nav>
         <div className="sidebar-bottom"><div className="online"><span /> Sistema operativo</div><button className="nav-item logout" onClick={logout}><Icon name="logout" />Cerrar sesión</button></div>
       </aside>
 
       <main className="workspace" id="overview">
         <header className="topbar">
+          <button className="menu-button" type="button" aria-label="Abrir menú" aria-expanded={menuOpen} aria-controls="sidebar" onClick={() => setMenuOpen((open) => !open)}><Icon name="menu" /></button>
           <div className="mobile-brand"><span className="brand-mark small">O</span> OMNIMARKET</div>
           <div className="breadcrumb"><span>Workspace</span><b>/</b><strong>Resumen</strong></div>
-          <div className="topbar-actions"><span className="live-status"><i /> Datos en vivo</span><div className="avatar">DK</div></div>
+          <div className="topbar-actions"><span className="live-status"><i /> Datos en vivo</span><div className="avatar" title={userEmail} aria-label={`Sesión de ${userEmail}`}>{initials}</div></div>
         </header>
         <div className="content">
           <section className="welcome-row">
-            <div><p className="eyebrow">SÁBADO, 24 DE OCTUBRE DE 2026</p><h1>Buenos días, equipo <span aria-hidden="true">✦</span></h1><p className="subheading">Aquí tienes el pulso de tu operación.</p></div>
-            <button className="secondary-button" onClick={() => loadData().catch(() => setError("No se pudo actualizar la información."))}><Icon name="refresh" />Actualizar</button>
+            <div><p className="eyebrow" suppressHydrationWarning>{today || "Hoy"}</p><h1>Centro de operaciones</h1><p className="subheading">Aquí tienes el pulso de tu operación.</p></div>
+            <div className="welcome-actions">
+              <button className="secondary-button" onClick={() => loadData().catch(() => setError("No se pudo actualizar la información."))}><Icon name="refresh" />Actualizar</button>
+              <button className="primary-button inline" type="button" onClick={() => setOrderModalOpen(true)}><Icon name="plus" />Nuevo pedido</button>
+            </div>
           </section>
           {error && <div className="alert error" role="alert"><Icon name="warning" />{error}<button onClick={() => setError(null)} aria-label="Cerrar alerta">×</button></div>}
-          {notice && <div className="alert success" role="status"><Icon name="check" />{notice}</div>}
+          {notice && <div className="alert success" role="status"><Icon name="check" />{notice}<button onClick={() => setNotice(null)} aria-label="Cerrar aviso">×</button></div>}
           <section className="kpis" id="analytics">
             {isLoading && !analytics ? <KpiSkeletons /> : <>
-              <Kpi icon="layers" label="Pedidos totales" value={analytics?.totalOrders.toString() ?? "—"} trend="12.8%" tone="blue" />
-              <Kpi icon="wallet" label="Ventas brutas" value={analytics ? money.format(analytics.totalSales) : "—"} trend="8.2%" tone="violet" />
-              <Kpi icon="target" label="Ticket promedio" value={analytics ? money.format(analytics.averageTicket) : "—"} trend="4.6%" tone="amber" />
-              <Kpi icon="chart" label="Margen operativo" value={analytics ? `${analytics.margin.toFixed(1)}%` : "—"} trend="2.1%" tone="green" />
+              <Kpi icon="layers" label="Pedidos totales" value={analytics?.totalOrders.toString() ?? "—"} hint="Todos los estados" tone="blue" />
+              <Kpi icon="wallet" label="Ventas brutas" value={analytics ? money.format(analytics.totalSales) : "—"} hint={analytics ? `Utilidad neta ${money.format(analytics.netProfit)}` : "Sin datos"} tone="violet" />
+              <Kpi icon="target" label="Ticket promedio" value={analytics ? money.format(analytics.averageTicket) : "—"} hint="Por pedido" tone="amber" />
+              <Kpi icon="chart" label="Margen operativo" value={analytics ? `${analytics.margin.toFixed(1)}%` : "—"} hint="Sobre ventas brutas" tone="green" />
             </>}
           </section>
-          <section className="section-heading" id="orders"><div><h2>Flujo de pedidos</h2><p>Arrastra una tarjeta para actualizar su estado.</p></div><div className="completion"><div className="progress-track"><span style={{ width: `${completedPercent}%` }} /></div><strong>{completedPercent}%</strong><span>completados</span></div></section>
-          <CreateOrderForm products={products} onCreated={(order) => {
+          <section className="section-heading" id="orders"><div><h2>Flujo de pedidos</h2><p>Arrastra una tarjeta para actualizar su estado; toca una para ver su actividad.</p></div><div className="completion"><div className="progress-track"><span style={{ width: `${completedPercent}%` }} /></div><strong>{completedPercent}%</strong><span>completados</span></div></section>
+          {orderModalOpen && <CreateOrderModal products={products} onClose={() => setOrderModalOpen(false)} onCreated={(order) => {
+            setOrderModalOpen(false);
             setOrders((current) => [order, ...current]);
             void loadData().catch(() => setError("El pedido se creó, pero no se pudieron actualizar los datos."));
             setNotice(`${order.orderNumber} creado correctamente.`);
-          }} onError={setError} />
+          }} />}
           {selectedOrderIds.size > 0 && <div className="bulk-toolbar" aria-label="Edición en lote">
             <strong>{selectedOrderIds.size} pedidos seleccionados</strong>
             <label>Nuevo estado<select aria-label="Nuevo estado para selección" value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value as OrderStatus | "")}>
@@ -240,15 +273,27 @@ export function Dashboard() {
   );
 }
 
-function CreateOrderForm({ products, onCreated, onError }: { products: Product[]; onCreated: (order: Order) => void; onError: (message: string) => void }) {
+function useEscape(onClose: () => void) {
+  const ref = useRef(onClose);
+  ref.current = onClose;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") ref.current(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+function CreateOrderModal({ products, onCreated, onClose }: { products: Product[]; onCreated: (order: Order) => void; onClose: () => void }) {
   const [customerName, setCustomerName] = useState("");
   const [items, setItems] = useState([{ productId: "", quantity: "1" }]);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  useEscape(onClose);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
-    onError("");
+    setFormError("");
     try {
       const response = await fetch("/api/orders", {
         method: "POST",
@@ -260,26 +305,30 @@ function CreateOrderForm({ products, onCreated, onError }: { products: Product[]
         throw new Error(body.error ?? "No se pudo crear el pedido.");
       }
       onCreated(await response.json());
-      setCustomerName("");
-      setItems([{ productId: "", quantity: "1" }]);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "No se pudo crear el pedido.");
-    } finally {
+      setFormError(error instanceof Error ? error.message : "No se pudo crear el pedido.");
       setSubmitting(false);
     }
   }
 
-  return <form className="create-order-form" onSubmit={submit}>
-    <div><h2>Nuevo pedido</h2><p>Registra un pedido con uno o más productos.</p></div>
-    <label>Cliente<input required minLength={2} maxLength={120} value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre del cliente" /></label>
-    <div className="order-lines">{items.map((item, index) => <div className="order-line" key={index}>
-      <label>Producto<select required aria-label={`Producto ${index + 1}`} value={item.productId} onChange={(event) => setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, productId: event.target.value } : line))}><option value="">Selecciona un producto</option>{products.filter((product) => !items.some((line, lineIndex) => lineIndex !== index && line.productId === product.id)).map((product) => <option key={product.id} value={product.id}>{product.name} · {money.format(Number(product.price))} · stock {product.stock}</option>)}</select></label>
-      <label>Cantidad<input required aria-label={`Cantidad ${index + 1}`} type="number" min="1" max="1000" value={item.quantity} onChange={(event) => setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, quantity: event.target.value } : line))} /></label>
-      {items.length > 1 && <button className="remove-line" type="button" aria-label={`Eliminar producto ${index + 1}`} onClick={() => setItems((current) => current.filter((_, lineIndex) => lineIndex !== index))}>×</button>}
-    </div>)}</div>
-    <button className="secondary-button add-line" type="button" disabled={items.length >= products.length} onClick={() => setItems((current) => [...current, { productId: "", quantity: "1" }])}>+ Producto</button>
-    <button className="primary-button" type="submit" disabled={submitting || products.length === 0}>{submitting ? "Guardando…" : "Crear pedido"}</button>
-  </form>;
+  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-order-title">
+      <div className="modal-header"><div><h2 id="new-order-title">Nuevo pedido</h2><p>Registra un pedido con uno o más productos.</p></div><button className="icon-button" type="button" aria-label="Cerrar formulario" onClick={onClose}>×</button></div>
+      <form className="create-order-form" onSubmit={submit}>
+        <label className="field">Cliente<input autoFocus required minLength={2} maxLength={120} value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre del cliente" /></label>
+        <div className="order-lines">{items.map((item, index) => <div className="order-line" key={index}>
+          <label className="field">Producto<select required aria-label={`Producto ${index + 1}`} value={item.productId} onChange={(event) => setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, productId: event.target.value } : line))}><option value="">Selecciona un producto</option>{products.filter((product) => !items.some((line, lineIndex) => lineIndex !== index && line.productId === product.id)).map((product) => <option key={product.id} value={product.id}>{product.name} · {money.format(Number(product.price))} · stock {product.stock}</option>)}</select></label>
+          <label className="field">Cantidad<input required aria-label={`Cantidad ${index + 1}`} type="number" min="1" max="1000" value={item.quantity} onChange={(event) => setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, quantity: event.target.value } : line))} /></label>
+          {items.length > 1 ? <button className="remove-line" type="button" aria-label={`Eliminar producto ${index + 1}`} onClick={() => setItems((current) => current.filter((_, lineIndex) => lineIndex !== index))}>×</button> : <span />}
+        </div>)}</div>
+        {formError && <div className="form-error" role="alert">{formError}</div>}
+        <div className="form-actions">
+          <button className="secondary-button add-line" type="button" disabled={items.length >= products.length} onClick={() => setItems((current) => [...current, { productId: "", quantity: "1" }])}>+ Producto</button>
+          <button className="primary-button inline" type="submit" disabled={submitting || products.length === 0}>{submitting ? "Guardando…" : "Crear pedido"}</button>
+        </div>
+      </form>
+    </div>
+  </div>;
 }
 
 function KanbanColumn({ status, orders, onSelect, selectedOrderIds, onToggleSelection }: { status: OrderStatus; orders: Order[]; onSelect: (order: Order) => void; selectedOrderIds: Set<string>; onToggleSelection: (orderId: string, selected: boolean) => void }) {
@@ -289,9 +338,8 @@ function KanbanColumn({ status, orders, onSelect, selectedOrderIds, onToggleSele
 
 function OrderCard({ order, dragging = false, onSelect, selected = false, onToggleSelection }: { order: Order; dragging?: boolean; onSelect?: (order: Order) => void; selected?: boolean; onToggleSelection?: (orderId: string, selected: boolean) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: order.id, data: { status: order.status } });
-  return <article ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }} className={`order-card ${isDragging || dragging ? "is-dragging" : ""}`} onClick={() => onSelect?.(order)} {...listeners} {...attributes} aria-label={`Ver historial de ${order.orderNumber}`}>
-    {onToggleSelection && <input className="order-select" type="checkbox" aria-label={`Seleccionar ${order.orderNumber}`} checked={selected} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => onToggleSelection(order.id, event.target.checked)} />}
-    <div className="order-card-header"><span className="order-number">{order.orderNumber}</span><span className={`priority-dot ${statusColors[order.status]}`} /></div><strong className="customer">{order.customerName}</strong><div className="order-card-footer"><span>{money.format(Number(order.total))}</span><span className="drag-hint" aria-label="Arrastrar pedido">⋮⋮</span></div></article>;
+  return <article ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }} className={`order-card ${isDragging || dragging ? "is-dragging" : ""} ${selected ? "is-selected" : ""}`} onClick={() => onSelect?.(order)} {...listeners} {...attributes} aria-label={`Ver historial de ${order.orderNumber}`}>
+    <div className="order-card-header"><div className="order-card-id">{onToggleSelection && <input className="order-select" type="checkbox" aria-label={`Seleccionar ${order.orderNumber}`} checked={selected} onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => onToggleSelection(order.id, event.target.checked)} />}<span className="order-number">{order.orderNumber}</span></div><span className={`priority-dot ${statusColors[order.status]}`} /></div><strong className="customer">{order.customerName}</strong><div className="order-card-footer"><span>{money.format(Number(order.total))}</span><span className="drag-hint" aria-label="Arrastrar pedido">⋮⋮</span></div></article>;
 }
 
 function KpiSkeletons() {
@@ -303,20 +351,24 @@ function BoardSkeleton() {
 }
 
 function OrderHistoryPanel({ order, entries, loading, error, onClose }: { order: Order; entries: StatusHistoryEntry[]; loading: boolean; error: string | null; onClose: () => void }) {
-  return <section className="history-panel" aria-label={`Historial de ${order.orderNumber}`}>
-    <div className="history-header"><div><span className="eyebrow">ACTIVIDAD DEL PEDIDO</span><h2>{order.orderNumber}</h2><p>{order.customerName}</p></div><button className="secondary-button" onClick={onClose} aria-label="Cerrar historial">Cerrar</button></div>
+  useEscape(onClose);
+  return <>
+    <div className="drawer-scrim" onClick={onClose} aria-hidden="true" />
+    <section className="history-panel" aria-label={`Historial de ${order.orderNumber}`}>
+    <div className="history-header"><div><span className="eyebrow">ACTIVIDAD DEL PEDIDO</span><h2>{order.orderNumber}</h2><p>{order.customerName}</p></div><button className="icon-button" onClick={onClose} aria-label="Cerrar historial">×</button></div>
     {loading && <p className="history-state">Cargando actividad…</p>}
     {error && <p className="history-state history-error" role="alert">{error}</p>}
     {!loading && !error && entries.length === 0 && <p className="history-state">Este pedido aún no tiene cambios de estado.</p>}
     {!loading && !error && entries.length > 0 && <ol className="history-list">{entries.map((entry) => <li key={entry.id}><span className={`history-dot ${statusColors[entry.newStatus]}`} /><div><strong>{statusLabels[entry.previousStatus]} → {statusLabels[entry.newStatus]}</strong><span>{entry.actorEmail}</span><time dateTime={entry.changedAt}>{new Date(entry.changedAt).toLocaleString("es-MX")}</time></div></li>)}</ol>}
-  </section>;
+  </section>
+  </>;
 }
 
-function Kpi({ icon, label, value, trend, tone }: { icon: string; label: string; value: string; trend: string; tone: string }) {
-  return <article className="kpi"><div className={`kpi-icon ${tone}`}><Icon name={icon} /></div><div className="kpi-copy"><span>{label}</span><strong>{value}</strong><small><em>↑ {trend}</em> vs. periodo anterior</small></div></article>;
+function Kpi({ icon, label, value, hint, tone }: { icon: string; label: string; value: string; hint: string; tone: string }) {
+  return <article className="kpi"><div className={`kpi-icon ${tone}`}><Icon name={icon} /></div><div className="kpi-copy"><span>{label}</span><strong>{value}</strong><small>{hint}</small></div></article>;
 }
 
 function Icon({ name }: { name: string }) {
-  const paths: Record<string, string> = { grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z", layers: "M12 3 3 8l9 5 9-5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5", chart: "M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8", wallet: "M4 6h16v13H4zM4 9h16M16 14h2", target: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z", refresh: "M20 11a8 8 0 1 0 1 5M20 4v7h-7", warning: "m12 4 9 16H3L12 4Zm0 6v4m0 3h.01", check: "m5 12 4 4L19 6", logout: "M10 17l5-5-5-5m5 5H3m9-7V3h8v18h-8v-2" };
+  const paths: Record<string, string> = { grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z", layers: "M12 3 3 8l9 5 9-5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5", chart: "M4 19V5m0 14h16M8 16v-5m4 5V7m4 9v-8", wallet: "M4 6h16v13H4zM4 9h16M16 14h2", target: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z", refresh: "M20 11a8 8 0 1 0 1 5M20 4v7h-7", warning: "m12 4 9 16H3L12 4Zm0 6v4m0 3h.01", check: "m5 12 4 4L19 6", logout: "M10 17l5-5-5-5m5 5H3m9-7V3h8v18h-8v-2", menu: "M4 7h16M4 12h16M4 17h16", plus: "M12 5v14M5 12h14" };
   return <svg aria-hidden="true" className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[name]} /></svg>;
 }

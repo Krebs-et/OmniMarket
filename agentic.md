@@ -61,7 +61,7 @@ La suite actual contiene:
 
 - 7 pruebas unitarias.
 - 9 pruebas de integración.
-- 7 pruebas E2E.
+- 11 pruebas E2E (incluye overflow responsivo en móvil/tablet/desktop y menú móvil).
 
 No declarar diez pruebas ni un SLA de 300 ms como hechos hasta implementarlos y medirlos. Toda afirmación de rendimiento debe indicar endpoint, dataset, entorno, número de muestras y percentil.
 
@@ -116,7 +116,8 @@ La primera entrega del Sprint 2 incorpora:
 - Control de inventario: permite múltiples productos sin duplicados, descuenta stock con una condición SQL atómica y revierte toda la transacción ante stock insuficiente (`409`).
 - Cancelación segura: `PENDING`, `CONFIRMED` y `PROCESSING` reintegran líneas al stock en una transacción; repetir la cancelación no duplica inventario y `SHIPPED`/`DELIVERED` responden `409`.
 - Auditoría: cada transición real se registra en `order_status_history` con estado anterior, estado nuevo, actor y fecha; el historial se consulta mediante `GET /api/orders/:id/history`.
-- UI de auditoría: las tarjetas del Kanban abren un panel autenticado con las transiciones, actor y fecha del pedido seleccionado.
+- UI de auditoría: las tarjetas del Kanban abren un panel lateral autenticado (hoja inferior en móvil) con las transiciones, actor y fecha del pedido seleccionado.
+- UI responsiva: design tokens con contraste AA en `globals.css`, fuentes con `next/font`, barra lateral off-canvas en ≤1100 px, formulario "Nuevo pedido" en modal y arrastre táctil con pulsación larga. La UI no muestra métricas ficticias.
 - UX: se muestran skeletons para indicadores y columnas durante la carga inicial; la edición en lote realiza cambios secuenciales mediante la ruta de estado auditada e informa errores parciales sin ocultar operaciones ya aplicadas.
 - Seguridad: Auth.js permite Google/GitHub cuando sus credenciales están configuradas; el acceso demo se limita a desarrollo. Middleware aplica CSP, headers de seguridad, 100 solicitudes/minuto/IP y un límite adicional en analítica. En producción requiere Upstash y `x-real-ip` establecido por el proxy confiable; sin Redis, las APIs protegidas responden `503`.
 - Protección de abuso: se cuentan fallas de autenticación, excesos de rate limit y rutas API desconocidas para suspender la IP durante 24 horas al cruzar los umbrales documentados en README.

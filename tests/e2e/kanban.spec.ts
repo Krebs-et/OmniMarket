@@ -42,6 +42,7 @@ test("rejects unauthenticated API access", async ({ request }) => {
 test("creates an order from the catalog", async ({ page }) => {
   await login(page);
   const customerName = `Cliente E2E ${Date.now()}`;
+  await page.getByRole("button", { name: "Nuevo pedido" }).click();
   await page.getByRole("textbox", { name: "Cliente" }).fill(customerName);
   await page.getByLabel("Producto 1").selectOption({ index: 1 });
   await page.getByRole("spinbutton", { name: "Cantidad 1" }).fill("2");
