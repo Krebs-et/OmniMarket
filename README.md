@@ -1,6 +1,6 @@
 # OmniMarket Operations Hub
 
-MVP local del dashboard operativo. La aplicación usa Next.js y PostgreSQL mediante Drizzle ORM. La configuración no depende de un proveedor de hosting: puede ejecutarse localmente y desplegarse posteriormente en Vercel, Railway o una arquitectura AWS compatible con PostgreSQL. El modelo Sprint 2 añade catálogo (`products`) y líneas de pedido (`order_items`).
+MVP local del dashboard operativo. La aplicación usa Next.js 15 y PostgreSQL mediante Drizzle ORM. La configuración no depende de un proveedor de hosting: puede ejecutarse localmente y desplegarse posteriormente en Vercel, Railway o una arquitectura AWS compatible con PostgreSQL. El modelo Sprint 2 añade catálogo (`products`) y líneas de pedido (`order_items`).
 
 ## Requisitos
 
@@ -39,6 +39,9 @@ El formulario **Nuevo pedido** crea pedidos desde el catálogo mediante `POST /a
 ## Validación
 
 ```bash
+pnpm audit --prod --audit-level=high
+pnpm lint
+pnpm typecheck
 pnpm test
 pnpm test:integration
 pnpm test:e2e
@@ -170,3 +173,7 @@ Vercel despliega desde Git. El flujo [`deploy.yml`](./.github/workflows/deploy.y
 Estas cifras no incluyen latencia de red a RDS ni Vercel y no constituyen un SLA. Optimizaciones derivadas: el descuento de stock de `createOrder` es una sola sentencia set-based (50 líneas: 213 → 50 ms) y la migración `0005` añade índices GIN `pg_trgm` para las búsquedas `ILIKE` (búsqueda de pedidos: 52 → 15 ms).
 
 Observabilidad: el middleware añade `X-Request-Id` (usa `x-vercel-id` si existe) y registra en JSON los rechazos de seguridad (`api_request_rejected`, `unknown_api_path`); `/api/health` incluye `databaseLatencyMs`. Los logs se consultan en Vercel.
+
+## Seguridad de dependencias
+
+El workflow de CI ejecuta `pnpm audit --prod --audit-level=high` antes de lint/typecheck/tests/build y falla ante vulnerabilidades altas o críticas en dependencias de producción. Dependabot revisa semanalmente dependencias npm/pnpm y GitHub Actions. El smoke de despliegue comprueba que Auth.js expone GitHub y que una solicitud CSRF válida inicia OAuth y redirige a GitHub; no completa el consentimiento de un usuario externo.

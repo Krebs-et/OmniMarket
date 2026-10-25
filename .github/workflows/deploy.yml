@@ -61,6 +61,19 @@ jobs:
           expect /login 200
           expect /api/orders 401
           expect /api/nope 404
+          expect /api/auth/providers 200
+      - name: Verify GitHub OAuth initiation
+        run: |
+          set -euo pipefail
+          providers=$(curl -fsS "$BASE_URL/api/auth/providers")
+          echo "$providers" | grep -q '"github"' || { echo "::error::GitHub OAuth provider is not configured"; exit 1; }
+          temp_dir=$(mktemp -d)
+          trap 'rm -rf "$temp_dir"' EXIT
+          csrf=$(curl -fsS -c "$temp_dir/cookies" "$BASE_URL/api/auth/csrf" | jq -r '.csrfToken')
+          status=$(curl -s -o /dev/null -w '%{http_code}' -b "$temp_dir/cookies" -c "$temp_dir/cookies" \
+            -D "$temp_dir/headers" --data-urlencode "csrfToken=$csrf" "$BASE_URL/api/auth/signin/github")
+          [ "$status" = 302 ] || { echo "::error::GitHub OAuth initiation returned $status instead of 302"; exit 1; }
+          grep -Eqi '^location: https://github.com/login/oauth/authorize' "$temp_dir/headers" || { echo "::error::GitHub OAuth initiation did not redirect to GitHub"; exit 1; }
       - name: Check security headers and rate limiting
         run: |
           headers=$(curl -s -D - -o /dev/null "$BASE_URL/api/orders")

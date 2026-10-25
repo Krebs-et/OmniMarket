@@ -4,7 +4,7 @@ Este documento define el contrato de trabajo para Copilot, revisiones humanas y 
 
 ## 1. Stack vigente
 
-- Next.js 14 App Router, React y TypeScript en modo estricto.
+- Next.js 15 App Router, React 18 y TypeScript en modo estricto.
 - Tailwind CSS 3 como pipeline obligatorio de estilos mediante `tailwind.config.ts`, `postcss.config.mjs` y las directivas `@tailwind` de `src/app/globals.css`.
 - PostgreSQL gestionado, compatible con Amazon RDS/Aurora, usando Drizzle ORM y `postgres`.
 - Modelo de catálogo Sprint 2 con `products` y `order_items`, relaciones e índices de consulta.
@@ -43,6 +43,7 @@ Los Route Handlers autentican, validan con Zod e invocan casos de uso. No deben 
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm audit --prod --audit-level=high
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -98,11 +99,11 @@ Si un cambio modifica stack, comandos, rutas, variables, arquitectura, criterios
 
 GitHub Actions ejecuta tres gates y valida que cada migración SQL esté referenciada por el journal antes de migrar:
 
-1. `quality`: instalación reproducible, ESLint, TypeScript, unitarias y build.
+1. `quality`: instalación reproducible, auditoría de dependencias de producción (sin vulnerabilidades altas/críticas), ESLint, TypeScript, unitarias y build.
 2. `integration`: PostgreSQL 16 efímero, verificación de metadatos Drizzle, migración, seed y pruebas de integración con fixtures propios.
 3. `e2e`: PostgreSQL efímero, verificación de metadatos Drizzle, migración, seed, Chromium y flujos Playwright.
 
-Los reportes Playwright se publican como artefactos cuando el job termina. Vercel sólo debe desplegar una revisión que haya pasado estos gates.
+Los reportes Playwright se publican como artefactos cuando el job termina. Dependabot revisa semanalmente los paquetes npm/pnpm y GitHub Actions. Tras CI exitoso, el workflow de despliegue migra RDS y verifica el inicio OAuth de GitHub, sin realizar login interactivo. Vercel sólo debe desplegar una revisión que haya pasado estos gates.
 
 ## 8. Sprint 2 — base de catálogo
 

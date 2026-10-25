@@ -6,7 +6,7 @@ These instructions are the source of truth for agent-assisted development in thi
 
 ## Stack
 
-- Next.js 14 App Router, React, TypeScript strict mode.
+- Next.js 15 App Router, React 18, TypeScript strict mode.
 - Tailwind CSS 3 through `tailwind.config.ts`, `postcss.config.mjs`, and `src/app/globals.css` (design tokens as CSS variables, AA-contrast colors, minimum 12px text, `:focus-visible` states). Fonts load through `next/font`, not CSS `@import`. UI conventions: new-order form is a modal, order activity is a side drawer, sidebar is off-canvas at ≤1100px, no hardcoded/fake metrics in the UI.
 - PostgreSQL with Drizzle ORM and `postgres`; the Sprint 2 model includes OAuth `users/accounts/sessions`, `products`, `orders`, `order_items`, and status history.
 - Auth.js v5 with Google and GitHub OAuth in production; demo login is development-only.
@@ -38,6 +38,7 @@ These instructions are the source of truth for agent-assisted development in thi
 Run the smallest relevant checks, then the full gate before finalizing:
 
 ```bash
+pnpm audit --prod --audit-level=high
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -54,7 +55,7 @@ The project currently has 18 unit tests, 21 integration tests, and 19 E2E tests.
 
 Run `pnpm bench` (local PostgreSQL only) after query or index changes; never quote its numbers as an SLA.
 
-Deploy workflow (`.github/workflows/deploy.yml`): after CI succeeds on `main`, it migrates RDS (secret `PRODUCTION_DATABASE_URL`, never seed) and runs a read-only smoke test against production.
+Deploy workflow (`.github/workflows/deploy.yml`): after CI succeeds on `main` or `master`, it migrates RDS (secret `PRODUCTION_DATABASE_URL`, never seed) and runs a read-only smoke test against production, including GitHub OAuth initiation.
 
 ## Change protocol
 

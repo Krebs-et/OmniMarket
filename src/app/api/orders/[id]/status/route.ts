@@ -5,10 +5,11 @@ import { authorize } from "@lib/authorize";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await authorize(request, "orders:write");
   if ("response" in access) return access.response;
   const session = access.session;
+  const { id } = await params;
   const parsed = updateOrderStatusSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
@@ -16,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   let order;
   try {
-    order = await updateOrderStatus(params.id, parsed.data.status, session.email);
+    order = await updateOrderStatus(id, parsed.data.status, session.email);
   } catch (error) {
     if (error instanceof InvalidOrderTransitionError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
