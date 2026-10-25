@@ -8,7 +8,7 @@ import { Alerts, Icon, fetchJson, money, statusColors, statusLabels, statusSingu
 import { CreateOrderModal } from "./create-order-modal";
 import { OrderHistoryPanel, type StatusHistoryEntry } from "./order-history-panel";
 
-const COLUMN_PAGE = 20;
+const COLUMN_PAGE = 4;
 const TABLE_PAGE = 20;
 type Column = { items: Order[]; total: number; loading: boolean };
 type Columns = Record<OrderStatus, Column>;
@@ -238,11 +238,11 @@ function KanbanColumn({ status, column, onSelect, selectedIds, onToggle, onLoadM
       <span className={`column-dot ${statusColors[status]}`} /><h3>{statusLabels[status]}</h3><b title={`${column.total} pedidos`}>{column.total.toLocaleString("es-MX")}</b>
       <input className="column-select" type="checkbox" aria-label={`Seleccionar columna ${statusLabels[status]}`} disabled={ids.length === 0} checked={allSelected} onChange={(event) => onToggle(ids, event.target.checked)} />
     </div>
-    <div className="column-cards">
+    <div className={`column-cards ${remaining > 0 ? "has-more" : ""}`}>
       {column.items.map((order) => <OrderCard key={order.id} order={order} onSelect={onSelect} selected={selectedIds.has(order.id)} onToggle={onToggle} />)}
       {column.items.length === 0 && !column.loading && <div className="empty-column">Suelta aquí tus pedidos</div>}
-      {remaining > 0 && <button className="load-more" type="button" disabled={column.loading} onClick={onLoadMore}>{column.loading ? "Cargando…" : `Cargar más (${remaining.toLocaleString("es-MX")})`}</button>}
     </div>
+    {remaining > 0 && <button className="load-more" type="button" disabled={column.loading} onClick={onLoadMore}>{column.loading ? "Cargando…" : `Ver más (${remaining.toLocaleString("es-MX")})`}</button>}
   </div>;
 }
 

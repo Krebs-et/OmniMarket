@@ -70,7 +70,7 @@ Cada transición real de estado se registra en `order_status_history` con estado
 
 ## Escalabilidad y navegación
 
-La aplicación tiene tres rutas dedicadas: `/` (Resumen), `/orders` (Tablero/Tabla) y `/analytics`. `GET /api/orders` admite `status`, `q`, `sort` (`created|total|customer`), `dir`, `page` y `limit`; `GET /api/products` admite `q` y `limit`. El Kanban carga 20 pedidos por columna con "Cargar más" y muestra el total real; la tabla pagina y ordena en servidor. `PATCH /api/orders/status` actualiza hasta 100 pedidos por conjuntos en una transacción y reporta fallos parciales. El modal de nuevo pedido busca productos en servidor y admite hasta 50 líneas.
+La aplicación tiene tres rutas dedicadas: `/` (Resumen), `/orders` (Tablero/Tabla) y `/analytics`. `GET /api/orders` admite `status`, `q`, `sort` (`created|total|customer`), `dir`, `page` y `limit`; `GET /api/products` admite `q` y `limit`. El Kanban se adapta al ancho (6, 3, 2 o 1 columnas según la ventana, sin scroll horizontal ni interno), muestra 4 pedidos por columna con un borde difuminado y el botón "Ver más (N)", y el total real; la tabla pagina y ordena en servidor. `PATCH /api/orders/status` actualiza hasta 100 pedidos por conjuntos en una transacción y reporta fallos parciales. El modal de nuevo pedido busca productos en servidor y admite hasta 50 líneas.
 
 En el dashboard, selecciona cualquier tarjeta del Kanban para abrir su panel de actividad y revisar las transiciones registradas.
 

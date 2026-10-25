@@ -85,8 +85,18 @@ test("updates multiple selected orders and reports the result", async ({ page })
 });
 
 test("opens order activity history", async ({ page }) => {
-  await login(page);
-  const card = page.locator(".order-card").filter({ hasText: "OM-1001" });
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Entrar al dashboard" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  const customerName = `Historial E2E ${Date.now()}`;
+  const products = (await (await page.request.get("/api/products?limit=50")).json()).filter((product: { stock: number }) => product.stock > 5);
+  const created = await (await page.request.post("/api/orders", { data: { customerName, items: [{ productId: products[0].id, quantity: 1 }] } })).json();
+  const moved = await page.request.patch(`/api/orders/${created.id}/status`, { data: { status: "PROCESSING" } });
+  expect(moved.ok(), await moved.text()).toBe(true);
+
+  await page.goto("/orders");
+  await page.getByLabel("Buscar pedidos").fill(customerName);
+  const card = page.locator(".order-card").filter({ hasText: customerName });
   await expect(card).toBeVisible();
   const orderNumber = await card.locator(".order-number").innerText();
   await card.click();
