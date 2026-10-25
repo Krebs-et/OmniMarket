@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { updateOrderStatusSchema } from "@application/dtos/order.dto";
 import { InvalidOrderTransitionError, updateOrderStatus } from "@application/use-cases/update-order-status";
 import { authorize } from "@lib/authorize";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function updateOrderStatusRoute(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await authorize(request, "orders:write");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const session = access.session;
   const { id } = await params;
   const parsed = updateOrderStatusSchema.safeParse(await request.json());
@@ -30,3 +31,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   return NextResponse.json(order);
 }
+
+export const PATCH = withApiObservability("PATCH", "/api/orders/[id]/status", updateOrderStatusRoute);

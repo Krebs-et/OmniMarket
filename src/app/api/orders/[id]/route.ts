@@ -9,21 +9,22 @@ import {
 } from "@application/use-cases/edit-order";
 import { authorize } from "@lib/authorize";
 import { z } from "zod";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function getOrderRoute(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await authorize(request, "orders:read");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid order id" }, { status: 400 });
   const result = await getOrderDetails(id);
   return result ? NextResponse.json(result) : NextResponse.json({ error: "Order not found" }, { status: 404 });
 }
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function editOrderRoute(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await authorize(request, "orders:write");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid order id" }, { status: 400 });
   const parsed = editOrderSchema.safeParse(await request.json().catch(() => null));
@@ -38,3 +39,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     throw error;
   }
 }
+
+export const GET = withApiObservability("GET", "/api/orders/[id]", getOrderRoute);
+export const PUT = withApiObservability("PUT", "/api/orders/[id]", editOrderRoute);

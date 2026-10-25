@@ -176,7 +176,11 @@ Vercel despliega desde Git. El flujo [`deploy.yml`](./.github/workflows/deploy.y
 
 Estas cifras no incluyen latencia de red a RDS ni Vercel y no constituyen un SLA. Optimizaciones derivadas: el descuento de stock de `createOrder` es una sola sentencia set-based (50 líneas: 213 → 50 ms) y la migración `0005` añade índices GIN `pg_trgm` para las búsquedas `ILIKE` (búsqueda de pedidos: 52 → 15 ms).
 
-Observabilidad: el middleware añade `X-Request-Id` (usa `x-vercel-id` si existe) y registra en JSON los rechazos de seguridad (`api_request_rejected`, `unknown_api_path`); `/api/health` incluye `databaseLatencyMs`. Los logs se consultan en Vercel.
+Observabilidad: las rutas API emiten una línea JSON por respuesta con método, plantilla de ruta (sin IDs), status HTTP, resultado, duración, request ID y nivel. Las excepciones se vuelven a lanzar para preservar el manejo de errores de Next.js y solo se registra su tipo, nunca el mensaje, cuerpo, query string ni dirección IP. Las respuestas incluyen `X-Request-Id` y `Server-Timing` con la duración de la ruta; `/api/health` agrega el tiempo de la consulta PostgreSQL (`db;dur`) y `databaseLatencyMs`.
+
+El middleware usa el `x-vercel-id` provisto por Vercel como correlación cuando está presente; si no, genera un UUID y lo propaga a las rutas. Los logs de aplicación usan los eventos `api_request`, `slow_api_request` (duración ≥ 1000 ms) y `api_request_failed` (respuesta 5xx o excepción). Los rechazos del middleware siguen registrados como `api_request_rejected` y `unknown_api_path`. En Vercel, busca estos eventos en **Logs**; correlaciona los reportes con `X-Request-Id` y filtra por `route`, `status` o `event`. El umbral de 1 s es un indicador operativo inicial, no un SLA ni una alerta administrada; la plataforma de logs no calcula percentiles ni crea alertas automáticamente.
+
+`pnpm bench` mide casos de uso de forma secuencial contra PostgreSQL local, con muestra y percentiles p50/p95/p99; no mide latencia de red, middleware ni renderizado de Vercel. Usa muestras de logs de un periodo y entorno definidos para evaluar producción; no mezcles resultados de producción con el benchmark local.
 
 ## Seguridad de dependencias
 

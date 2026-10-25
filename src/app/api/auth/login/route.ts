@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { DEMO_ACCOUNTS } from "@application/use-cases/resolve-role";
 import { createSession, sessionCookie } from "@lib/auth";
 import { recordAuthenticationFailure } from "@lib/security";
+import { withApiObservability } from "@lib/api-observability";
 
-export async function POST(request: Request) {
+async function demoLoginRoute(request: Request) {
   if (process.env.NODE_ENV === "production" || process.env.APP_ENV === "production") {
     return NextResponse.json({ error: "Demo login is only available in development" }, { status: 404 });
   }
@@ -23,3 +24,5 @@ export async function POST(request: Request) {
   response.cookies.set(sessionCookie(createSession(email)));
   return response;
 }
+
+export const POST = withApiObservability("POST", "/api/auth/login", demoLoginRoute);

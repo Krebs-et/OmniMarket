@@ -4,12 +4,13 @@ import { listProducts } from "@application/use-cases/get-products";
 import { DuplicateSkuError, createProduct } from "@application/use-cases/manage-products";
 import { authorize } from "@lib/authorize";
 import { can } from "@domain/value-objects/role";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function listProductsRoute(request: Request) {
   const access = await authorize(request, "catalog:read");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
 
   const { searchParams } = new URL(request.url);
   const parsed = productSearchSchema.safeParse({
@@ -27,9 +28,9 @@ export async function GET(request: Request) {
   return NextResponse.json(await listProducts({ ...parsed.data, includeInactive }));
 }
 
-export async function POST(request: Request) {
+async function createProductRoute(request: Request) {
   const access = await authorize(request, "catalog:write");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
 
   const parsed = createProductSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -42,3 +43,6 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+
+export const GET = withApiObservability("GET", "/api/products", listProductsRoute);
+export const POST = withApiObservability("POST", "/api/products", createProductRoute);

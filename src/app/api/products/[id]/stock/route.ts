@@ -3,12 +3,13 @@ import { z } from "zod";
 import { adjustStockSchema } from "@application/dtos/order.dto";
 import { InsufficientAdjustmentError, adjustStock } from "@application/use-cases/manage-products";
 import { authorize } from "@lib/authorize";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function adjustProductStockRoute(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await authorize(request, "catalog:write");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid product id" }, { status: 400 });
 
@@ -23,3 +24,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     throw error;
   }
 }
+
+export const POST = withApiObservability("POST", "/api/products/[id]/stock", adjustProductStockRoute);

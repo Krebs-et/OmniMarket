@@ -42,6 +42,7 @@ export async function middleware(request: NextRequest) {
   const requestId = request.headers.get("x-vercel-id") ?? crypto.randomUUID();
   const csp = policy(nonce);
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
 

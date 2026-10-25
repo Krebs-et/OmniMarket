@@ -39,7 +39,17 @@ describe("middleware", () => {
     const response = await middleware(request("/login"));
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(response.headers.get("content-security-policy")).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+  });
+
+  it("uses the Vercel request id for response correlation", async () => {
+    const middleware = await loadMiddleware(production);
+    const response = await middleware(request("/api/orders", {
+      "x-real-ip": "198.51.100.1",
+      "x-vercel-id": "vercel-request-123",
+    }));
+    expect(response.headers.get("x-request-id")).toBe("vercel-request-123");
   });
 
   it("fails closed with 503 on API routes when Upstash is not configured in production", async () => {

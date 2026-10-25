@@ -3,12 +3,13 @@ import { createOrderSchema, listOrdersQuerySchema } from "@application/dtos/orde
 import { createOrder, InsufficientStockError, ProductNotFoundError } from "@application/use-cases/create-order";
 import { getOrders } from "@application/use-cases/get-orders";
 import { authorize } from "@lib/authorize";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function getOrdersRoute(request: Request) {
   const access = await authorize(request, "orders:read");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const { searchParams } = new URL(request.url);
   const parsed = listOrdersQuerySchema.safeParse(Object.fromEntries(
     ["page", "limit", "status", "q", "sort", "dir"].map((key) => [key, searchParams.get(key) || undefined]),
@@ -21,9 +22,9 @@ export async function GET(request: Request) {
   return NextResponse.json(await getOrders(parsed.data));
 }
 
-export async function POST(request: Request) {
+async function createOrderRoute(request: Request) {
   const access = await authorize(request, "orders:write");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
 
   const parsed = createOrderSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -42,3 +43,6 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+
+export const GET = withApiObservability("GET", "/api/orders", getOrdersRoute);
+export const POST = withApiObservability("POST", "/api/orders", createOrderRoute);

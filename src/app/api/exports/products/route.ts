@@ -4,12 +4,13 @@ import { getDb } from "@infrastructure/db/client";
 import { products } from "@infrastructure/db/schema";
 import { authorize } from "@lib/authorize";
 import { toCsv } from "@lib/csv";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function exportProductsRoute(request: Request) {
   const access = await authorize(request, "catalog:read");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const rows = await getDb().select().from(products).orderBy(asc(products.name));
   const csv = toCsv([
     ["sku", "producto", "precio", "costo", "stock", "umbral_bajo_stock", "activo"],
@@ -26,3 +27,5 @@ export async function GET(request: Request) {
     },
   });
 }
+
+export const GET = withApiObservability("GET", "/api/exports/products", exportProductsRoute);

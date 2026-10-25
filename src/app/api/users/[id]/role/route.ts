@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { updateUserRoleSchema } from "@application/dtos/order.dto";
 import { ProtectedUserRoleError, updateUserRole, UserNotFoundError } from "@application/use-cases/manage-users";
 import { authorize } from "@lib/authorize";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function updateUserRoleRoute(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await authorize(request, "users:manage");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const { id } = await params;
   const parsed = updateUserRoleSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
@@ -19,3 +20,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     throw error;
   }
 }
+
+export const PATCH = withApiObservability("PATCH", "/api/users/[id]/role", updateUserRoleRoute);

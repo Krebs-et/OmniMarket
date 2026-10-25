@@ -4,12 +4,13 @@ import { getDb } from "@infrastructure/db/client";
 import { orders } from "@infrastructure/db/schema";
 import { authorize } from "@lib/authorize";
 import { toCsv } from "@lib/csv";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function exportOrdersRoute(request: Request) {
   const access = await authorize(request, "orders:read");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const rows = await getDb().select().from(orders).orderBy(desc(orders.createdAt));
   const csv = toCsv([
     ["pedido", "cliente", "estado", "total", "costo", "creado", "actualizado"],
@@ -26,3 +27,5 @@ export async function GET(request: Request) {
     },
   });
 }
+
+export const GET = withApiObservability("GET", "/api/exports/orders", exportOrdersRoute);

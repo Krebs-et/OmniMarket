@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { bulkUpdateStatusSchema } from "@application/dtos/order.dto";
 import { updateOrdersStatus } from "@application/use-cases/update-orders-status";
 import { authorize } from "@lib/authorize";
+import { withApiObservability } from "@lib/api-observability";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request) {
+async function updateOrdersStatusRoute(request: Request) {
   const access = await authorize(request, "orders:write");
-  if ("response" in access) return access.response;
+  if (access.response) return access.response;
   const session = access.session;
   const parsed = bulkUpdateStatusSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -15,3 +16,5 @@ export async function PATCH(request: Request) {
   }
   return NextResponse.json(await updateOrdersStatus(parsed.data.ids, parsed.data.status, session.email));
 }
+
+export const PATCH = withApiObservability("PATCH", "/api/orders/status", updateOrdersStatusRoute);
