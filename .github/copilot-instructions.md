@@ -50,7 +50,7 @@ Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/status
 
 Authorization is role-based (`admin`, `operator`, `viewer`; `src/domain/value-objects/role.ts`). Routes call `authorize(request, permission)` from `src/lib/authorize.ts` (401 unauthenticated, 403 without permission). Roles resolve in this order: `ADMIN_EMAILS` (comma-separated), `users.role` in the database, development-only demo accounts (`demo@`, `operator@`, `viewer@omnimarket.local`), else `viewer`. Products are soft-deleted (`active=false`); every stock change is recorded in `stock_movements`. The `/products` page manages the catalog.
 
-The project currently has 11 unit tests, 21 integration tests, and 19 E2E tests. OAuth callbacks and Upstash behavior still require deployment credentials for external verification. Do not claim a latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, sample count, and percentile.
+The project currently has 18 unit tests, 21 integration tests, and 19 E2E tests. OAuth callbacks and Upstash behavior still require deployment credentials for external verification. Do not claim a latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, sample count, and percentile.
 
 ## Change protocol
 
