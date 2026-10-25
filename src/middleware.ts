@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkApiRequest, isKnownApiPath, recordUnknownApiPath } from "./src/lib/security";
+import { checkApiRequest, isKnownApiPath, recordUnknownApiPath } from "./lib/security";
 
 function makeNonce() {
   return btoa(crypto.randomUUID()).replace(/=/g, "");
