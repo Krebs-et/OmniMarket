@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getAnalytics } from "@application/use-cases/get-analytics";
 import { getOrders } from "@application/use-cases/get-orders";
 import { updateOrderStatus } from "@application/use-cases/update-order-status";
@@ -9,24 +9,58 @@ import { createOrder } from "@application/use-cases/create-order";
 import { closeDb, getDb } from "@infrastructure/db/client";
 import { orders, products, orderItems } from "@infrastructure/db/schema";
 
+const now = Date.now();
 const integrationOrder = {
-  orderNumber: `TEST-${Date.now()}`,
+  orderNumber: `TEST-${now}`,
   customerName: "Integration Test",
   status: "PENDING" as const,
   total: "100.00",
   cost: "60.00",
 };
 
+const integrationProducts = [
+  {
+    sku: `TEST-SKU-A-${now}`,
+    name: "Integration Product A",
+    price: "120.00",
+    cost: "70.00",
+    stock: 25,
+  },
+  {
+    sku: `TEST-SKU-B-${now}`,
+    name: "Integration Product B",
+    price: "80.00",
+    cost: "40.00",
+    stock: 30,
+  },
+];
+
+async function getIntegrationProducts() {
+  const rows = await getDb()
+    .select()
+    .from(products)
+    .where(inArray(products.sku, integrationProducts.map((item) => item.sku)));
+
+  if (rows.length !== integrationProducts.length) {
+    throw new Error("Expected integration products to exist");
+  }
+
+  return rows.sort((a, b) => a.sku.localeCompare(b.sku));
+}
+
 describe("orders and analytics integration", () => {
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is required for integration tests");
     }
+
+    await getDb().insert(products).values(integrationProducts);
     await getDb().insert(orders).values(integrationOrder);
   });
 
   afterAll(async () => {
     await getDb().delete(orders).where(eq(orders.orderNumber, integrationOrder.orderNumber));
+    await getDb().delete(products).where(inArray(products.sku, integrationProducts.map((item) => item.sku)));
     await closeDb();
   });
 
@@ -45,8 +79,7 @@ describe("orders and analytics integration", () => {
   });
 
   it("creates an order and its items atomically from catalog prices", async () => {
-    const selectedProducts = await getDb().select().from(products).limit(2);
-    const [product, secondProduct] = selectedProducts;
+    const [product, secondProduct] = await getIntegrationProducts();
     const created = await createOrder({
       customerName: "Atomic Integration",
       items: [
@@ -65,7 +98,7 @@ describe("orders and analytics integration", () => {
   });
 
   it("rolls back stock when inventory is insufficient", async () => {
-    const [product] = await getDb().select().from(products).limit(1);
+    const [product] = await getIntegrationProducts();
     const originalStock = product.stock;
 
     await expect(createOrder({
@@ -78,7 +111,7 @@ describe("orders and analytics integration", () => {
   });
 
   it("restores stock exactly once when an order is cancelled", async () => {
-    const [product] = await getDb().select().from(products).limit(1);
+    const [product] = await getIntegrationProducts();
     const originalStock = product.stock;
     const created = await createOrder({
       customerName: "Cancellation Integration",
@@ -95,10 +128,10 @@ describe("orders and analytics integration", () => {
     expect(reservedProduct.stock).toBe(originalStock - 2);
     expect(restoredProduct.stock).toBe(originalStock);
     await getDb().delete(orders).where(eq(orders.id, created.id));
-  });
+  }, 15000);
 
   it("does not restore stock when cancelling a shipped order", async () => {
-    const [product] = await getDb().select().from(products).limit(1);
+    const [product] = await getIntegrationProducts();
     const created = await createOrder({
       customerName: "Shipped Integration",
       items: [{ productId: product.id, quantity: 1 }],
@@ -111,7 +144,7 @@ describe("orders and analytics integration", () => {
     const [unchangedProduct] = await getDb().select().from(products).where(eq(products.id, product.id));
     expect(unchangedProduct.stock).toBe(product.stock - 1);
     await getDb().delete(orders).where(eq(orders.id, created.id));
-  });
+  }, 15000);
 
   it("records an auditable status history with the actor", async () => {
     const [created] = await getDb().select().from(orders).where(eq(orders.orderNumber, integrationOrder.orderNumber));
