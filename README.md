@@ -30,7 +30,9 @@ Correo: demo@omnimarket.local
 Contraseña: omnimarket
 ```
 
-El dashboard protege la sesión con una cookie HttpOnly firmada. El tablero Kanban permite arrastrar tarjetas con mouse, touch o teclado; al soltar, el cambio se persiste mediante `PATCH /api/orders/:id/status` y se revierte si la API falla.
+El dashboard usa Google/GitHub OAuth en producción mediante Auth.js; el login demo con cookie firmada sólo está disponible en desarrollo. El tablero Kanban permite arrastrar tarjetas con mouse, touch o teclado; al soltar, el cambio se persiste mediante `PATCH /api/orders/:id/status` y se revierte si la API falla.
+
+El tablero muestra skeletons mientras carga la información y permite seleccionar varios pedidos para actualizar su estado. La actualización en lote reutiliza la ruta auditada por pedido; si una o más operaciones fallan (por ejemplo, al cancelar pedidos enviados), el aviso informa cuáles no se cambiaron. Las operaciones exitosas no se revierten por fallos en otros pedidos.
 
 El formulario **Nuevo pedido** crea pedidos desde el catálogo mediante `POST /api/orders`. Permite varias líneas sin repetir productos. El payload se valida con Zod y el pedido, sus líneas y el decremento de inventario se persisten en una única transacción; los precios y costos se toman del catálogo en el servidor. Si no existe stock suficiente, la operación responde `409` y no modifica la base.
 
@@ -49,7 +51,7 @@ La UI utiliza Tailwind CSS como pipeline de estilos (`tailwind.config.ts`, `post
 
 ### Catálogo y migraciones
 
-El esquema incluye `products` y `order_items`, con índices para consultar pedidos por estado/fecha y líneas por pedido/producto. `GET /api/products` requiere una sesión autenticada y devuelve el catálogo ordenado por nombre.
+El esquema incluye `users`, `accounts`, `sessions` y `verification_tokens` para la integración OAuth, además de `products` y `order_items`, con índices para consultar pedidos por estado/fecha y líneas por pedido/producto. `GET /api/products` requiere una sesión autenticada y devuelve el catálogo ordenado por nombre.
 
 `POST /api/orders` requiere sesión y acepta:
 
@@ -75,6 +77,8 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
+La suite actual tiene 7 pruebas unitarias, 9 de integración y 7 E2E. Las pruebas OAuth externas y el rate limiting real requieren configurar proveedores y Upstash; esas dependencias no se verifican localmente sin sus credenciales.
+
 ## Primer despliegue en Vercel
 
 El proyecto incluye [vercel.json](./vercel.json) y usa el build nativo de Next.js. Desde Vercel:
@@ -87,12 +91,19 @@ El proyecto incluye [vercel.json](./vercel.json) y usa el build nativo de Next.j
 DATABASE_URL
 APP_ENV=production
 AUTH_SECRET
-DEMO_EMAIL
-DEMO_PASSWORD
+AUTH_TRUST_HOST=true
+AUTH_GOOGLE_ID
+AUTH_GOOGLE_SECRET
+AUTH_GITHUB_ID
+AUTH_GITHUB_SECRET
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
 DB_POOL_MAX=1
 ```
 
-`AUTH_SECRET`, `DEMO_PASSWORD` y `DATABASE_URL` deben ser secretos reales; no reutilices los valores de `.env.example`.
+`AUTH_SECRET`, credenciales OAuth, credenciales Redis y `DATABASE_URL` deben configurarse como secretos reales. El acceso demo no debe habilitarse en producción. Configura callbacks OAuth para `https://TU-DOMINIO/api/auth/callback/google` y `https://TU-DOMINIO/api/auth/callback/github`; para desarrollo local, usa `http://localhost:3000/api/auth/callback/google` y `/api/auth/callback/github`.
+
+Upstash es obligatorio en producción: el middleware limita las APIs a 100 solicitudes/minuto/IP y `/api/analytics` añade 30 solicitudes/10 segundos/IP. Más de tres infracciones repetidas, más de 15 respuestas de autenticación fallida por minuto o tres rutas API desconocidas activan un bloqueo temporal de 24 horas. Sin las credenciales Redis, las APIs protegidas responden `503`. El proxy de entrada debe proporcionar `x-real-ip` confiable y sobrescribir cualquier valor enviado por el cliente; no se confía en `x-forwarded-for` en producción.
 
 ### PostgreSQL compatible con RDS/AWS
 

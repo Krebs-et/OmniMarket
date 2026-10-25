@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { createSession, sessionCookie } from "@lib/auth";
+import { recordAuthenticationFailure } from "@lib/security";
 
 export async function POST(request: Request) {
+  if (process.env.NODE_ENV === "production" || process.env.APP_ENV === "production") {
+    return NextResponse.json({ error: "Demo login is only available in development" }, { status: 404 });
+  }
+
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
-  const expectedEmail = (process.env.DEMO_EMAIL ?? (process.env.NODE_ENV === "production" ? "" : "demo@omnimarket.local")).toLowerCase();
-  const expectedPassword = process.env.DEMO_PASSWORD ?? (process.env.NODE_ENV === "production" ? "" : "omnimarket");
+  const expectedEmail = (process.env.DEMO_EMAIL ?? "demo@omnimarket.local").toLowerCase();
+  const expectedPassword = process.env.DEMO_PASSWORD ?? "omnimarket";
 
   if (email !== expectedEmail || password !== expectedPassword) {
+    await recordAuthenticationFailure(request);
     return NextResponse.json({ error: "Correo o contraseña incorrectos" }, { status: 401 });
   }
 

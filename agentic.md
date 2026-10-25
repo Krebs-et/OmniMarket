@@ -11,9 +11,11 @@ Este documento define el contrato de trabajo para Copilot, revisiones humanas y 
 - `@dnd-kit` para el tablero Kanban.
 - Vitest para pruebas unitarias e integración.
 - Playwright para pruebas E2E.
+- Auth.js v5 con Google/GitHub OAuth en producción y login demo sólo en desarrollo.
+- Upstash Redis con rate limiting de producción, conteo de actividad anómala y bloqueos temporales de IP.
 - Vercel como despliegue actual de la aplicación.
 
-No se debe introducir Python, SQLModel, NextAuth, Redis, endpoints `/api/test/*` o Tailwind alternativo como si ya existieran. Si una tarea incorpora una de estas tecnologías, debe actualizar este contrato, la documentación y las pruebas en el mismo cambio.
+No se debe introducir Python, SQLModel ni endpoints `/api/test/*` como si ya existieran. Auth.js, Redis y Tailwind forman parte del stack vigente y su configuración/uso se documenta en README e instrucciones.
 
 ## 2. Arquitectura
 
@@ -57,9 +59,9 @@ El build de Vercel ejecuta `pnpm vercel-build`; no ejecuta migraciones ni seed.
 
 La suite actual contiene:
 
-- 4 pruebas unitarias.
+- 7 pruebas unitarias.
 - 9 pruebas de integración.
-- 6 pruebas E2E.
+- 7 pruebas E2E.
 
 No declarar diez pruebas ni un SLA de 300 ms como hechos hasta implementarlos y medirlos. Toda afirmación de rendimiento debe indicar endpoint, dataset, entorno, número de muestras y percentil.
 
@@ -75,6 +77,7 @@ GET    /api/products
 GET    /api/health
 POST   /api/auth/login
 POST   /api/auth/logout
+GET/POST /api/auth/*
 ```
 
 ## 6. Ciclo de cambio
@@ -114,14 +117,17 @@ La primera entrega del Sprint 2 incorpora:
 - Cancelación segura: `PENDING`, `CONFIRMED` y `PROCESSING` reintegran líneas al stock en una transacción; repetir la cancelación no duplica inventario y `SHIPPED`/`DELIVERED` responden `409`.
 - Auditoría: cada transición real se registra en `order_status_history` con estado anterior, estado nuevo, actor y fecha; el historial se consulta mediante `GET /api/orders/:id/history`.
 - UI de auditoría: las tarjetas del Kanban abren un panel autenticado con las transiciones, actor y fecha del pedido seleccionado.
+- UX: se muestran skeletons para indicadores y columnas durante la carga inicial; la edición en lote realiza cambios secuenciales mediante la ruta de estado auditada e informa errores parciales sin ocultar operaciones ya aplicadas.
+- Seguridad: Auth.js permite Google/GitHub cuando sus credenciales están configuradas; el acceso demo se limita a desarrollo. Middleware aplica CSP, headers de seguridad, 100 solicitudes/minuto/IP y un límite adicional en analítica. En producción requiere Upstash y `x-real-ip` establecido por el proxy confiable; sin Redis, las APIs protegidas responden `503`.
+- Protección de abuso: se cuentan fallas de autenticación, excesos de rate limit y rutas API desconocidas para suspender la IP durante 24 horas al cruzar los umbrales documentados en README.
 
 Las migraciones se ejecutan explícitamente con `pnpm db:migrate:deploy`; el build y Vercel no modifican el esquema. El seed sigue siendo destructivo y sólo debe ejecutarse contra una base local o efímera conocida.
 
-Auth.js/OAuth, CSP, rate limiting, Redis, vistas de skeleton, edición masiva y observabilidad quedan como incrementos posteriores del Sprint 2. No se deben simular como implementados.
+Los endpoints `/api/test/analytics`, `/api/test/reset-data` y `/api/test/kanban-status` del plan inicial se sustituyen deliberadamente por rutas reales protegidas (`/api/analytics`, `/api/orders`, `PATCH /api/orders/:id/status`) y fixtures/seed en bases locales o efímeras; no se exponen rutas de reset en la aplicación. No se afirma el SLA de 300 ms: la latencia aún no se ha medido bajo un dataset, entorno y percentil definidos. La observabilidad externa también queda fuera del sprint.
 
 ## 9. Evolución
 
-Las futuras incorporaciones de Auth.js/OAuth, CSP, rate limiting, Redis, productos, `order_items`, observabilidad o medición de latencia deben:
+La medición reproducible de latencia y la observabilidad externa quedan como siguientes mejoras. Cualquier cambio futuro de seguridad, esquema, rutas o variables debe:
 
 - Definir alcance y variables nuevas.
 - Actualizar este documento y las instrucciones de Copilot.

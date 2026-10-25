@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { auth } from "../../auth";
 
 const SESSION_COOKIE = "omnimarket_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
@@ -19,11 +20,11 @@ function signature(value: string) {
 
 export function createSession(email: string) {
   const value = Buffer.from(JSON.stringify({ email, exp: Date.now() + SESSION_TTL_SECONDS * 1000 })).toString("base64url");
-  return `${value}.${signature(value)}`;
+  return value + "." + signature(value);
 }
 
 export function verifySession(token: string | undefined) {
-  if (!token) return null;
+  if (process.env.NODE_ENV === "production" || !token) return null;
   const [value, providedSignature] = token.split(".");
   if (!value || !providedSignature) return null;
 
@@ -41,6 +42,9 @@ export function verifySession(token: string | undefined) {
 }
 
 export async function getSession() {
+  const oauthSession = await auth();
+  if (oauthSession?.user?.email) return { email: oauthSession.user.email };
+  if (process.env.NODE_ENV === "production" || process.env.APP_ENV === "production") return null;
   return verifySession((await cookies()).get(SESSION_COOKIE)?.value);
 }
 

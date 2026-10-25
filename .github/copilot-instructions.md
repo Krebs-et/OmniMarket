@@ -8,7 +8,9 @@ These instructions are the source of truth for agent-assisted development in thi
 
 - Next.js 14 App Router, React, TypeScript strict mode.
 - Tailwind CSS 3 through `tailwind.config.ts`, `postcss.config.mjs`, and `src/app/globals.css`.
-- PostgreSQL with Drizzle ORM and `postgres`; the Sprint 2 catalog model includes `products` and `order_items`.
+- PostgreSQL with Drizzle ORM and `postgres`; the Sprint 2 model includes OAuth `users/accounts/sessions`, `products`, `orders`, `order_items`, and status history.
+- Auth.js v5 with Google and GitHub OAuth in production; demo login is development-only.
+- Upstash Redis and `@upstash/ratelimit` for production API limits and temporary IP bans.
 - `@dnd-kit` for Kanban interactions.
 - Vitest for unit/integration tests and Playwright for E2E.
 - Vercel for the current application deployment; Amazon RDS/Aurora PostgreSQL is the compatible production database target.
@@ -28,6 +30,7 @@ These instructions are the source of truth for agent-assisted development in thi
 - Never use production RDS for destructive tests, seed, or reset operations.
 - Use an isolated PostgreSQL service/container for CI integration tests. CI verifies that Drizzle journal/SQL migration files are present, then migrates and seeds only the ephemeral integration database. Integration tests must still create their own required fixtures.
 - Keep `sslmode=require` for remote PostgreSQL connections and `DB_POOL_MAX=1` for serverless deployments unless measured evidence justifies a change.
+- Configure both Upstash REST secrets in production; API requests fail closed with `503` when the limiter is unavailable. The ingress proxy must overwrite `x-real-ip` with a trusted client address; production does not trust a client-supplied `x-forwarded-for`.
 - Do not add `/api/test/*` routes without an explicit threat model and production guard.
 
 ## Validation
@@ -43,9 +46,9 @@ pnpm test:e2e
 pnpm build
 ```
 
-Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/history`, `GET /api/analytics`, `GET /api/products`, `GET /api/health`, `POST /api/auth/login`, and `POST /api/auth/logout`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Cancelling eligible orders restores stock transactionally and idempotently; shipped or delivered orders cannot be cancelled. Real status transitions are audited with actor and timestamp, and the dashboard exposes the selected order's activity panel. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
+Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/history`, `GET /api/analytics`, `GET /api/products`, `GET /api/health`, `POST /api/auth/login`, `POST /api/auth/logout`, and Auth.js `/api/auth/*`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Cancelling eligible orders restores stock transactionally and idempotently; shipped or delivered orders cannot be cancelled. Real status transitions are audited with actor and timestamp, and the dashboard exposes the selected order's activity panel. The Kanban includes loading skeletons and multi-selection with sequential status updates; partial failures are reported per order. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
 
-The project currently has 4 unit tests, 9 integration tests, and 6 E2E tests. Do not claim a test count or latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, and percentile.
+The project currently has 7 unit tests, 9 integration tests, and 7 E2E tests. OAuth callbacks and Upstash behavior still require deployment credentials for external verification. Do not claim a latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, sample count, and percentile.
 
 ## Change protocol
 

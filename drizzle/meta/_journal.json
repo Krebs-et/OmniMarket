@@ -22,6 +22,13 @@
       "when": 1792899742012,
       "tag": "0002_exotic_kang",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792903080813,
+      "tag": "0003_broken_kronos",
+      "breakpoints": true
     }
   ]
 }

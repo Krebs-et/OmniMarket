@@ -3,12 +3,51 @@ import {
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   index,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+export const authUsers = pgTable("users", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  email: text("email").unique(),
+  emailVerified: timestamp("email_verified", { withTimezone: true }),
+  image: text("image"),
+});
+
+export const authAccounts = pgTable("accounts", {
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  provider: text("provider").notNull(),
+  providerAccountId: text("provider_account_id").notNull(),
+  refresh_token: text("refresh_token"),
+  access_token: text("access_token"),
+  expires_at: integer("expires_at"),
+  token_type: text("token_type"),
+  scope: text("scope"),
+  id_token: text("id_token"),
+  session_state: text("session_state"),
+}, (table) => ({
+  providerAccountPk: primaryKey({ columns: [table.provider, table.providerAccountId] }),
+}));
+
+export const authSessions = pgTable("sessions", {
+  sessionToken: text("session_token").primaryKey(),
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  expires: timestamp("expires", { withTimezone: true }).notNull(),
+});
+
+export const authVerificationTokens = pgTable("verification_tokens", {
+  identifier: text("identifier").notNull(),
+  token: text("token").notNull().unique(),
+  expires: timestamp("expires", { withTimezone: true }).notNull(),
+}, (table) => ({
+  verificationTokenPk: primaryKey({ columns: [table.identifier, table.token] }),
+}));
 
 export const orderStatus = pgEnum("order_status", [
   "PENDING",

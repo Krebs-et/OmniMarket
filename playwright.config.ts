@@ -21,6 +21,12 @@ export default defineConfig({
   webServer: {
     command: "pnpm dev",
     url: `${baseURL}/login`,
+    env: {
+      AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-only-secret",
+      APP_ENV: process.env.APP_ENV ?? "development",
+      DEMO_EMAIL: process.env.DEMO_EMAIL ?? "demo@omnimarket.local",
+      DEMO_PASSWORD: process.env.DEMO_PASSWORD ?? "omnimarket",
+    },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

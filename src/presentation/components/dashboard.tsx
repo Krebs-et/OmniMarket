@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, KeyboardSensor, PointerSensor, closestCorners, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { signOut } from "next-auth/react";
 import { ORDER_STATUSES, type OrderStatus } from "@domain/value-objects/order-status";
 
 type Order = {
@@ -31,6 +32,7 @@ export function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -38,14 +40,22 @@ export function Dashboard() {
   const [history, setHistory] = useState<StatusHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState<OrderStatus | "">("");
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
 
   async function loadData() {
-    const [ordersResponse, analyticsResponse, productsResponse] = await Promise.all([fetch("/api/orders"), fetch("/api/analytics"), fetch("/api/products")]);
-    if (!ordersResponse.ok || !analyticsResponse.ok || !productsResponse.ok) throw new Error("No se pudieron cargar los datos.");
-    setOrders(await ordersResponse.json());
-    setAnalytics(await analyticsResponse.json());
-    setProducts(await productsResponse.json());
+    setIsLoading(true);
+    try {
+      const [ordersResponse, analyticsResponse, productsResponse] = await Promise.all([fetch("/api/orders"), fetch("/api/analytics"), fetch("/api/products")]);
+      if (!ordersResponse.ok || !analyticsResponse.ok || !productsResponse.ok) throw new Error("No se pudieron cargar los datos.");
+      setOrders(await ordersResponse.json());
+      setAnalytics(await analyticsResponse.json());
+      setProducts(await productsResponse.json());
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => { loadData().catch(() => setError("No se pudieron cargar los datos. Verifica la conexión con PostgreSQL.")); }, []);
@@ -71,14 +81,81 @@ export function Dashboard() {
     setError(null);
     setNotice(null);
     setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
-    const response = await fetch(`/api/orders/${order.id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    let response: Response;
+    try {
+      response = await fetch(`/api/orders/${order.id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    } catch {
+      try {
+        await loadData();
+      } catch {
+        setOrders(previous);
+      }
+      setError(`No se pudo confirmar el cambio de ${order.orderNumber}. Actualiza los datos antes de volver a intentarlo.`);
+      return;
+    }
     if (!response.ok) {
       setOrders(previous);
       setError(`No se pudo mover ${order.orderNumber}. El cambio fue revertido.`);
       return;
     }
-    setAnalytics(await fetch("/api/analytics").then((result) => result.json()));
+    try {
+      const analyticsResponse = await fetch("/api/analytics");
+      if (!analyticsResponse.ok) throw new Error("Analytics request failed");
+      setAnalytics(await analyticsResponse.json());
+    } catch {
+      setError(`${order.orderNumber} se actualizó, pero no se pudieron refrescar los indicadores.`);
+    }
     setNotice(`${order.orderNumber} ahora está ${statusLabels[status].toLowerCase()}.`);
+  }
+
+  function toggleOrderSelection(orderId: string, selected: boolean) {
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(orderId);
+      else next.delete(orderId);
+      return next;
+    });
+  }
+
+  async function applyBulkStatus() {
+    if (!bulkStatus || selectedOrderIds.size === 0) return;
+    setBulkUpdating(true);
+    setError(null);
+    setNotice(null);
+    const selectedOrders = orders.filter((order) => selectedOrderIds.has(order.id));
+    const failedOrderNumbers: string[] = [];
+    let updatedCount = 0;
+
+    for (const order of selectedOrders) {
+      try {
+        const response = await fetch(`/api/orders/${order.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: bulkStatus }),
+        });
+        if (!response.ok) {
+          failedOrderNumbers.push(order.orderNumber);
+          continue;
+        }
+        updatedCount += 1;
+      } catch {
+        failedOrderNumbers.push(order.orderNumber);
+      }
+    }
+
+    setSelectedOrderIds(new Set());
+    setBulkUpdating(false);
+    setBulkStatus("");
+    try {
+      await loadData();
+    } catch {
+      setError("No se pudo actualizar la vista después de aplicar los cambios.");
+    }
+    if (failedOrderNumbers.length > 0) {
+      setError(`${updatedCount} de ${selectedOrders.length} pedidos actualizados. No se pudieron cambiar: ${failedOrderNumbers.join(", ")}.`);
+    } else {
+      setNotice(`${updatedCount} pedidos actualizados correctamente.`);
+    }
   }
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -95,7 +172,7 @@ export function Dashboard() {
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
+    await signOut({ redirectTo: "/login" });
   }
 
   const completedPercent = useMemo(() => analytics && analytics.totalOrders ? Math.round(((orders.filter((order) => order.status === "DELIVERED").length) / analytics.totalOrders) * 100) : 0, [analytics, orders]);
@@ -126,20 +203,33 @@ export function Dashboard() {
           {error && <div className="alert error" role="alert"><Icon name="warning" />{error}<button onClick={() => setError(null)} aria-label="Cerrar alerta">×</button></div>}
           {notice && <div className="alert success" role="status"><Icon name="check" />{notice}</div>}
           <section className="kpis" id="analytics">
-            <Kpi icon="layers" label="Pedidos totales" value={analytics?.totalOrders.toString() ?? "—"} trend="12.8%" tone="blue" />
-            <Kpi icon="wallet" label="Ventas brutas" value={analytics ? money.format(analytics.totalSales) : "—"} trend="8.2%" tone="violet" />
-            <Kpi icon="target" label="Ticket promedio" value={analytics ? money.format(analytics.averageTicket) : "—"} trend="4.6%" tone="amber" />
-            <Kpi icon="chart" label="Margen operativo" value={analytics ? `${analytics.margin.toFixed(1)}%` : "—"} trend="2.1%" tone="green" />
+            {isLoading && !analytics ? <KpiSkeletons /> : <>
+              <Kpi icon="layers" label="Pedidos totales" value={analytics?.totalOrders.toString() ?? "—"} trend="12.8%" tone="blue" />
+              <Kpi icon="wallet" label="Ventas brutas" value={analytics ? money.format(analytics.totalSales) : "—"} trend="8.2%" tone="violet" />
+              <Kpi icon="target" label="Ticket promedio" value={analytics ? money.format(analytics.averageTicket) : "—"} trend="4.6%" tone="amber" />
+              <Kpi icon="chart" label="Margen operativo" value={analytics ? `${analytics.margin.toFixed(1)}%` : "—"} trend="2.1%" tone="green" />
+            </>}
           </section>
           <section className="section-heading" id="orders"><div><h2>Flujo de pedidos</h2><p>Arrastra una tarjeta para actualizar su estado.</p></div><div className="completion"><div className="progress-track"><span style={{ width: `${completedPercent}%` }} /></div><strong>{completedPercent}%</strong><span>completados</span></div></section>
           <CreateOrderForm products={products} onCreated={(order) => {
             setOrders((current) => [order, ...current]);
-            void loadData();
+            void loadData().catch(() => setError("El pedido se creó, pero no se pudieron actualizar los datos."));
             setNotice(`${order.orderNumber} creado correctamente.`);
           }} onError={setError} />
+          {selectedOrderIds.size > 0 && <div className="bulk-toolbar" aria-label="Edición en lote">
+            <strong>{selectedOrderIds.size} pedidos seleccionados</strong>
+            <label>Nuevo estado<select aria-label="Nuevo estado para selección" value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value as OrderStatus | "")}>
+              <option value="">Selecciona un estado</option>
+              {ORDER_STATUSES.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
+            </select></label>
+            <button className="primary-button" type="button" disabled={!bulkStatus || bulkUpdating} onClick={() => void applyBulkStatus()}>{bulkUpdating ? "Actualizando…" : "Aplicar a selección"}</button>
+            <button className="secondary-button" type="button" disabled={bulkUpdating} onClick={() => setSelectedOrderIds(new Set())}>Limpiar selección</button>
+          </div>}
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveOrder(null)}>
-            <section className="board" aria-label="Tablero Kanban de pedidos">
-              {ORDER_STATUSES.map((status) => <KanbanColumn key={status} status={status} orders={orders.filter((order) => order.status === status)} onSelect={showHistory} />)}
+            <section className="board" aria-label="Tablero Kanban de pedidos" aria-busy={isLoading}>
+              {isLoading && orders.length === 0
+                ? <BoardSkeleton />
+                : ORDER_STATUSES.map((status) => <KanbanColumn key={status} status={status} orders={orders.filter((order) => order.status === status)} onSelect={showHistory} selectedOrderIds={selectedOrderIds} onToggleSelection={toggleOrderSelection} />)}
             </section>
             <DragOverlay>{activeOrder ? <OrderCard order={activeOrder} dragging /> : null}</DragOverlay>
           </DndContext>
@@ -192,14 +282,24 @@ function CreateOrderForm({ products, onCreated, onError }: { products: Product[]
   </form>;
 }
 
-function KanbanColumn({ status, orders, onSelect }: { status: OrderStatus; orders: Order[]; onSelect: (order: Order) => void }) {
+function KanbanColumn({ status, orders, onSelect, selectedOrderIds, onToggleSelection }: { status: OrderStatus; orders: Order[]; onSelect: (order: Order) => void; selectedOrderIds: Set<string>; onToggleSelection: (orderId: string, selected: boolean) => void }) {
   const { isOver, setNodeRef } = useDroppable({ id: status });
-  return <div ref={setNodeRef} className={`kanban-column ${isOver ? "is-over" : ""}`}><div className="column-heading"><span className={`column-dot ${statusColors[status]}`} /><h3>{statusLabels[status]}</h3><b>{orders.length}</b></div><div className="column-cards">{orders.map((order) => <OrderCard key={order.id} order={order} onSelect={onSelect} />)}{orders.length === 0 && <div className="empty-column">Suelta aquí tus pedidos</div>}</div></div>;
+  return <div ref={setNodeRef} className={`kanban-column ${isOver ? "is-over" : ""}`}><div className="column-heading"><span className={`column-dot ${statusColors[status]}`} /><h3>{statusLabels[status]}</h3><b>{orders.length}</b></div><div className="column-cards">{orders.map((order) => <OrderCard key={order.id} order={order} onSelect={onSelect} selected={selectedOrderIds.has(order.id)} onToggleSelection={onToggleSelection} />)}{orders.length === 0 && <div className="empty-column">Suelta aquí tus pedidos</div>}</div></div>;
 }
 
-function OrderCard({ order, dragging = false, onSelect }: { order: Order; dragging?: boolean; onSelect?: (order: Order) => void }) {
+function OrderCard({ order, dragging = false, onSelect, selected = false, onToggleSelection }: { order: Order; dragging?: boolean; onSelect?: (order: Order) => void; selected?: boolean; onToggleSelection?: (orderId: string, selected: boolean) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: order.id, data: { status: order.status } });
-  return <article ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }} className={`order-card ${isDragging || dragging ? "is-dragging" : ""}`} onClick={() => onSelect?.(order)} {...listeners} {...attributes} aria-label={`Ver historial de ${order.orderNumber}`}><div className="order-card-header"><span className="order-number">{order.orderNumber}</span><span className={`priority-dot ${statusColors[order.status]}`} /></div><strong className="customer">{order.customerName}</strong><div className="order-card-footer"><span>{money.format(Number(order.total))}</span><span className="drag-hint" aria-label="Arrastrar pedido">⋮⋮</span></div></article>;
+  return <article ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }} className={`order-card ${isDragging || dragging ? "is-dragging" : ""}`} onClick={() => onSelect?.(order)} {...listeners} {...attributes} aria-label={`Ver historial de ${order.orderNumber}`}>
+    {onToggleSelection && <input className="order-select" type="checkbox" aria-label={`Seleccionar ${order.orderNumber}`} checked={selected} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => onToggleSelection(order.id, event.target.checked)} />}
+    <div className="order-card-header"><span className="order-number">{order.orderNumber}</span><span className={`priority-dot ${statusColors[order.status]}`} /></div><strong className="customer">{order.customerName}</strong><div className="order-card-footer"><span>{money.format(Number(order.total))}</span><span className="drag-hint" aria-label="Arrastrar pedido">⋮⋮</span></div></article>;
+}
+
+function KpiSkeletons() {
+  return <>{Array.from({ length: 4 }, (_, index) => <div key={index} className="kpi skeleton-card" aria-hidden="true"><span className="skeleton-block skeleton-icon" /><div className="kpi-copy"><span className="skeleton-block skeleton-label" /><strong className="skeleton-block skeleton-value" /><small className="skeleton-block skeleton-foot" /></div></div>)}</>;
+}
+
+function BoardSkeleton() {
+  return <>{ORDER_STATUSES.map((status) => <div key={status} className="kanban-column skeleton-column" aria-hidden="true"><span className="skeleton-block skeleton-column-title" /><span className="skeleton-block skeleton-order-card" /><span className="skeleton-block skeleton-order-card" /></div>)}</>;
 }
 
 function OrderHistoryPanel({ order, entries, loading, error, onClose }: { order: Order; entries: StatusHistoryEntry[]; loading: boolean; error: string | null; onClose: () => void }) {

@@ -3,11 +3,13 @@ import { createOrderSchema, paginationSchema } from "@application/dtos/order.dto
 import { createOrder, InsufficientStockError, ProductNotFoundError } from "@application/use-cases/create-order";
 import { getOrders } from "@application/use-cases/get-orders";
 import { getSession } from "@lib/auth";
+import { recordAuthenticationFailure } from "@lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   if (!(await getSession())) {
+    await recordAuthenticationFailure(request);
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   const { searchParams } = new URL(request.url);
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!(await getSession())) {
+    await recordAuthenticationFailure(request);
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 

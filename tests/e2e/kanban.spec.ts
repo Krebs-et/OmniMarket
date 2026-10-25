@@ -41,13 +41,28 @@ test("rejects unauthenticated API access", async ({ request }) => {
 
 test("creates an order from the catalog", async ({ page }) => {
   await login(page);
-  await page.getByRole("textbox", { name: "Cliente" }).fill("Cliente E2E");
+  const customerName = `Cliente E2E ${Date.now()}`;
+  await page.getByRole("textbox", { name: "Cliente" }).fill(customerName);
   await page.getByLabel("Producto 1").selectOption({ index: 1 });
   await page.getByRole("spinbutton", { name: "Cantidad 1" }).fill("2");
   await page.getByRole("button", { name: "Crear pedido" }).click();
 
   await expect(page.locator(".alert.success")).toContainText("creado correctamente");
-  await expect(page.locator(".order-card").filter({ hasText: "Cliente E2E" })).toBeVisible();
+  await expect(page.locator(".order-card").filter({ hasText: customerName })).toBeVisible();
+});
+
+test("updates multiple selected orders and reports the result", async ({ page }) => {
+  await login(page);
+  for (const orderNumber of ["OM-1001", "OM-1002"]) {
+    await page.locator(".order-card").filter({ hasText: orderNumber }).getByRole("checkbox", { name: `Seleccionar ${orderNumber}` }).check();
+  }
+  await page.getByLabel("Nuevo estado para selección").selectOption("CONFIRMED");
+  await page.getByRole("button", { name: "Aplicar a selección" }).click();
+
+  await expect(page.locator(".alert.success")).toContainText("2 pedidos actualizados correctamente.");
+  const confirmedColumn = page.locator(".kanban-column").filter({ has: page.getByRole("heading", { name: "Confirmados" }) });
+  await expect(confirmedColumn.locator(".order-card").filter({ hasText: "OM-1001" })).toBeVisible();
+  await expect(confirmedColumn.locator(".order-card").filter({ hasText: "OM-1002" })).toBeVisible();
 });
 
 test("opens order activity history", async ({ page }) => {
