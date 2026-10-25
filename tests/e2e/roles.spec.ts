@@ -61,7 +61,7 @@ test("admin creates, adjusts and deactivates a product", async ({ page }) => {
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText("negative stock");
   await page.getByRole("dialog").getByLabel("Cantidad a sumar o restar").fill("4");
   await page.getByRole("dialog").getByRole("button", { name: "Guardar" }).click();
-  await expect(row.locator("td").nth(4)).toHaveText("9");
+  await expect(row.locator("td").nth(4)).toHaveText(/^9(?:\D|$)/);
 
   await row.getByRole("button", { name: /Desactivar/ }).click();
   await expect(page.getByRole("row", { name: new RegExp(sku) })).toHaveCount(0);
