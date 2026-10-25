@@ -20,11 +20,12 @@ At 99.5% availability, a 30-day month permits at most 3 hours 36 minutes of unav
 - The panel currently summarizes the last 24 hours and produces in-product warnings for a recent 5-minute window. It does not provide a 30-day availability calculation, external notifications, or an independent uptime source.
 - The health endpoint can check PostgreSQL, but probing it only from the application or the same deployment would not independently prove customer reachability.
 - The local benchmark measures application use cases against local PostgreSQL; it is not evidence of Vercel-to-RDS production latency.
-- The `.env` in local development does not contain Google/GitHub OAuth credentials, so provider callbacks cannot be verified end to end locally.
+- Development OAuth credentials are configured locally. Google sign-in completed a real development callback; a GitHub sign-in using the same email was rejected with `OAuthAccountNotLinked`, confirming automatic account linking remains disabled. Production OAuth credentials and user callbacks were not exercised; the production smoke test only verifies GitHub OAuth initiation.
+- The latest committed revision passed CI, database migration and the production smoke workflow. This verifies the configured production endpoints and smoke checks, not a 30-day availability or latency objective.
 
 ## Readiness work required before declaring an SLA
 
-1. Configure an external uptime monitor for the production health URL with five-minute checks, retries, a separate alert channel, and retained timestamped results.
+1. Configure an external uptime monitor for the production health URL with five-minute checks, retries, a separate alert channel, and retained timestamped results; the current deploy smoke test is not continuous monitoring.
 2. Define the production domain, regions, supported routes, traffic window, latency sample minimum, and handling of low-volume routes. Do not report a percentile as passing when the minimum sample count is not met.
 3. Capture at least 30 consecutive days of production measurements. Record the deployment version, probe history, route/method, sample count, and database/region context with each report.
 4. Verify alert delivery, incident ownership, on-call coverage, escalation and customer communication. Establish database backup/restore evidence and recovery objectives (RTO/RPO).

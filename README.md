@@ -32,7 +32,7 @@ Contraseña: omnimarket
 
 El dashboard usa Google/GitHub OAuth en producción mediante Auth.js; el login demo con cookie firmada sólo está disponible en desarrollo. El tablero Kanban permite arrastrar tarjetas con mouse, touch o teclado; al soltar, el cambio se persiste mediante `PATCH /api/orders/:id/status` y se revierte si la API falla.
 
-Google y GitHub no vinculan cuentas automáticamente por coincidencia de correo (`allowDangerousEmailAccountLinking=false`). Si una persona ya tiene una cuenta OmniMarket con Google e intenta iniciar sesión con GitHub usando el mismo correo (o viceversa), Auth.js rechaza esa vinculación y requiere entrar con el proveedor ya asociado; la aplicación aún no incluye un flujo explícito para enlazar proveedores. Al enlazarlos explícitamente en una versión futura, ambos métodos deberán autenticar al mismo usuario y conservar el mismo rol. Las pruebas locales verifican esta configuración, pero el callback real requiere credenciales OAuth válidas.
+Google y GitHub no vinculan cuentas automáticamente por coincidencia de correo (`allowDangerousEmailAccountLinking=false`). Si una persona ya tiene una cuenta OmniMarket con Google e intenta iniciar sesión con GitHub usando el mismo correo (o viceversa), Auth.js rechaza esa vinculación y requiere entrar con el proveedor ya asociado; el login explica este comportamiento. La aplicación aún no incluye un flujo explícito para enlazar proveedores. Al enlazarlos explícitamente en una versión futura, ambos métodos deberán autenticar al mismo usuario y conservar el mismo rol. La verificación local con credenciales de desarrollo completó el callback de Google y comprobó que GitHub con el mismo correo no se enlaza. El smoke test de producción comprueba que GitHub inicia OAuth, pero no completa un callback de usuario real.
 
 El tablero muestra skeletons mientras carga la información y permite seleccionar varios pedidos para actualizar su estado. La actualización en lote reutiliza la ruta auditada por pedido; si una o más operaciones fallan (por ejemplo, al cancelar pedidos enviados), el aviso informa cuáles no se cambiaron. Las operaciones exitosas no se revierten por fallos en otros pedidos.
 
@@ -90,7 +90,7 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
-La suite incluye pruebas unitarias, de integración y E2E (incluye verificación de overflow en móvil/tablet/desktop y menú móvil). Las pruebas de integración requieren una base PostgreSQL aislada y migrada; nunca deben ejecutarse contra RDS de producción. Las pruebas OAuth externas y el rate limiting real requieren configurar proveedores y Upstash; esas dependencias no se verifican localmente sin sus credenciales.
+La suite vigente contiene 29 pruebas unitarias, 28 de integración y 22 E2E (incluye verificación de overflow en móvil/tablet/desktop, menú móvil y el mensaje de cuenta OAuth ya vinculada). Las pruebas de integración requieren una base PostgreSQL aislada y migrada; nunca deben ejecutarse contra RDS de producción. Los callbacks OAuth se han probado con credenciales de desarrollo, no con las credenciales de producción. CI/deploy verifica el inicio OAuth de GitHub y la presencia de headers de rate limit; no completa callbacks de usuario ni prueba externamente el bloqueo por abuso.
 
 ## Primer despliegue en Vercel
 
