@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getAnalytics } from "@application/use-cases/get-analytics";
 import { getOrders } from "@application/use-cases/get-orders";
 import { updateOrderStatus } from "@application/use-cases/update-order-status";
+import { getOrderStatusHistory } from "@application/use-cases/get-order-status-history";
 import { createOrder } from "@application/use-cases/create-order";
 import { closeDb, getDb } from "@infrastructure/db/client";
 import { orders, products, orderItems } from "@infrastructure/db/schema";
@@ -36,7 +37,7 @@ describe("orders and analytics integration", () => {
 
   it("persists a status update and exposes it in analytics", async () => {
     const [created] = await getDb().select().from(orders).where(eq(orders.orderNumber, integrationOrder.orderNumber));
-    const updated = await updateOrderStatus(created.id, "PROCESSING");
+    const updated = await updateOrderStatus(created.id, "PROCESSING", "integration@omnimarket.local");
     expect(updated?.status).toBe("PROCESSING");
 
     const analytics = await getAnalytics();
@@ -74,5 +75,53 @@ describe("orders and analytics integration", () => {
 
     const [unchangedProduct] = await getDb().select().from(products).where(eq(products.id, product.id));
     expect(unchangedProduct.stock).toBe(originalStock);
+  });
+
+  it("restores stock exactly once when an order is cancelled", async () => {
+    const [product] = await getDb().select().from(products).limit(1);
+    const originalStock = product.stock;
+    const created = await createOrder({
+      customerName: "Cancellation Integration",
+      items: [{ productId: product.id, quantity: 2 }],
+    });
+    const [reservedProduct] = await getDb().select().from(products).where(eq(products.id, product.id));
+
+    const cancelled = await updateOrderStatus(created.id, "CANCELLED", "integration@omnimarket.local");
+    const cancelledAgain = await updateOrderStatus(created.id, "CANCELLED", "integration@omnimarket.local");
+    const [restoredProduct] = await getDb().select().from(products).where(eq(products.id, product.id));
+
+    expect(cancelled?.status).toBe("CANCELLED");
+    expect(cancelledAgain?.status).toBe("CANCELLED");
+    expect(reservedProduct.stock).toBe(originalStock - 2);
+    expect(restoredProduct.stock).toBe(originalStock);
+    await getDb().delete(orders).where(eq(orders.id, created.id));
+  });
+
+  it("does not restore stock when cancelling a shipped order", async () => {
+    const [product] = await getDb().select().from(products).limit(1);
+    const created = await createOrder({
+      customerName: "Shipped Integration",
+      items: [{ productId: product.id, quantity: 1 }],
+    });
+    await updateOrderStatus(created.id, "SHIPPED", "integration@omnimarket.local");
+
+    await expect(updateOrderStatus(created.id, "CANCELLED", "integration@omnimarket.local"))
+      .rejects.toThrow("shipped or delivered cannot be cancelled");
+
+    const [unchangedProduct] = await getDb().select().from(products).where(eq(products.id, product.id));
+    expect(unchangedProduct.stock).toBe(product.stock - 1);
+    await getDb().delete(orders).where(eq(orders.id, created.id));
+  });
+
+  it("records an auditable status history with the actor", async () => {
+    const [created] = await getDb().select().from(orders).where(eq(orders.orderNumber, integrationOrder.orderNumber));
+    await updateOrderStatus(created.id, "CONFIRMED", "auditor@omnimarket.local");
+    const history = await getOrderStatusHistory(created.id);
+
+    expect(history[0]).toMatchObject({
+      previousStatus: "PROCESSING",
+      newStatus: "CONFIRMED",
+      actorEmail: "auditor@omnimarket.local",
+    });
   });
 });

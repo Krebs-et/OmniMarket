@@ -43,7 +43,7 @@ pnpm test:e2e
 pnpm build
 ```
 
-Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/analytics`, `GET /api/products`, `/api/health`, `/api/auth/login`, and `/api/auth/logout`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
+Current application routes are `GET/POST /api/orders`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/history`, `GET /api/analytics`, `GET /api/products`, `/api/health`, `/api/auth/login`, and `/api/auth/logout`. Order creation validates with Zod, persists order/items transactionally, and decrements stock only when sufficient inventory exists. Cancelling eligible orders restores stock transactionally and idempotently; shipped or delivered orders cannot be cancelled. Real status transitions are audited with actor and timestamp, and the dashboard exposes the selected order's activity panel. Do not refer to unimplemented `/api/test/*` routes as existing functionality.
 
 The project currently has 4 unit tests, 2 integration tests, and 4 E2E tests. Do not claim a test count or latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, and percentile.
 

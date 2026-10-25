@@ -49,3 +49,16 @@ test("creates an order from the catalog", async ({ page }) => {
   await expect(page.locator(".alert.success")).toContainText("creado correctamente");
   await expect(page.locator(".order-card").filter({ hasText: "Cliente E2E" })).toBeVisible();
 });
+
+test("opens order activity history", async ({ page }) => {
+  await login(page);
+  const card = page.locator(".order-card").filter({ hasText: "OM-1001" });
+  await expect(card).toBeVisible();
+  const orderNumber = await card.locator(".order-number").innerText();
+  await card.click();
+
+  const panel = page.getByRole("region", { name: `Historial de ${orderNumber}` });
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText("En proceso");
+  await expect(panel).toContainText("demo@omnimarket.local");
+});

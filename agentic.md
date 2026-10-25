@@ -58,8 +58,8 @@ El build de Vercel ejecuta `pnpm vercel-build`; no ejecuta migraciones ni seed.
 La suite actual contiene:
 
 - 4 pruebas unitarias.
-- 5 pruebas de integración.
-- 5 pruebas E2E.
+- 9 pruebas de integración.
+- 6 pruebas E2E.
 
 No declarar diez pruebas ni un SLA de 300 ms como hechos hasta implementarlos y medirlos. Toda afirmación de rendimiento debe indicar endpoint, dataset, entorno, número de muestras y percentil.
 
@@ -109,6 +109,9 @@ La primera entrega del Sprint 2 incorpora:
 - `GET /api/products`, protegido por la sesión existente.
 - `POST /api/orders` con validación Zod y transacción atómica de pedido y líneas usando precios/costos del catálogo.
 - Control de inventario: permite múltiples productos sin duplicados, descuenta stock con una condición SQL atómica y revierte toda la transacción ante stock insuficiente (`409`).
+- Cancelación segura: `PENDING`, `CONFIRMED` y `PROCESSING` reintegran líneas al stock en una transacción; repetir la cancelación no duplica inventario y `SHIPPED`/`DELIVERED` responden `409`.
+- Auditoría: cada transición real se registra en `order_status_history` con estado anterior, estado nuevo, actor y fecha; el historial se consulta mediante `GET /api/orders/:id/history`.
+- UI de auditoría: las tarjetas del Kanban abren un panel autenticado con las transiciones, actor y fecha del pedido seleccionado.
 
 Las migraciones se ejecutan explícitamente con `pnpm db:migrate:deploy`; el build y Vercel no modifican el esquema. El seed sigue siendo destructivo y sólo debe ejecutarse contra una base local o efímera conocida.
 

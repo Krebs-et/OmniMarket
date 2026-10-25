@@ -62,6 +62,12 @@ El esquema incluye `products` y `order_items`, con índices para consultar pedid
 
 El stock se descuenta con una actualización condicionada (`stock >= quantity`) para evitar inventario negativo bajo solicitudes concurrentes.
 
+Al cancelar un pedido en estado `PENDING`, `CONFIRMED` o `PROCESSING`, sus cantidades se reintegran al inventario dentro de la misma transacción. La cancelación es idempotente: repetirla no duplica el stock. Los pedidos `SHIPPED` o `DELIVERED` no pueden cancelarse y responden `409`.
+
+Cada transición real de estado se registra en `order_status_history` con estado anterior, estado nuevo, correo del actor y fecha. Las transiciones repetidas no crean eventos adicionales. El historial autenticado se consulta mediante `GET /api/orders/:id/history`.
+
+En el dashboard, selecciona cualquier tarjeta del Kanban para abrir su panel de actividad y revisar las transiciones registradas.
+
 Después de actualizar una base existente, aplica la nueva migración antes de ejecutar el seed:
 
 ```bash

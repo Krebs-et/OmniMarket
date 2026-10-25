@@ -57,8 +57,20 @@ export const orderItems = pgTable("order_items", {
   productIdx: index("idx_order_items_product_id").on(table.productId),
 }));
 
+export const orderStatusHistory = pgTable("order_status_history", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  previousStatus: orderStatus("previous_status").notNull(),
+  newStatus: orderStatus("new_status").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orderChangedAtIdx: index("idx_order_status_history_order_changed_at").on(table.orderId, table.changedAt),
+}));
+
 export const ordersRelations = relations(orders, ({ many }) => ({
   items: many(orderItems),
+  statusHistory: many(orderStatusHistory),
 }));
 
 export const productsRelations = relations(products, ({ many }) => ({
@@ -76,6 +88,14 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   }),
 }));
 
+export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderStatusHistory.orderId],
+    references: [orders.id],
+  }),
+}));
+
 export type Order = typeof orders.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;

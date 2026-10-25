@@ -14,6 +14,13 @@ type Order = {
   updatedAt: string;
 };
 type Product = { id: string; name: string; price: string; stock: number };
+type StatusHistoryEntry = {
+  id: string;
+  previousStatus: OrderStatus;
+  newStatus: OrderStatus;
+  actorEmail: string;
+  changedAt: string;
+};
 
 type Analytics = { totalOrders: number; totalSales: number; averageTicket: number; margin: number; netProfit: number };
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -27,6 +34,10 @@ export function Dashboard() {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [history, setHistory] = useState<StatusHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
 
   async function loadData() {
@@ -38,6 +49,22 @@ export function Dashboard() {
   }
 
   useEffect(() => { loadData().catch(() => setError("No se pudieron cargar los datos. Verifica la conexión con PostgreSQL.")); }, []);
+
+  async function showHistory(order: Order) {
+    setSelectedOrder(order);
+    setHistory([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/orders/${order.id}/history`);
+      if (!response.ok) throw new Error("No se pudo cargar el historial.");
+      setHistory(await response.json());
+    } catch (historyLoadError) {
+      setHistoryError(historyLoadError instanceof Error ? historyLoadError.message : "No se pudo cargar el historial.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   async function moveOrder(order: Order, status: OrderStatus) {
     const previous = orders;
@@ -112,10 +139,11 @@ export function Dashboard() {
           }} onError={setError} />
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveOrder(null)}>
             <section className="board" aria-label="Tablero Kanban de pedidos">
-              {ORDER_STATUSES.map((status) => <KanbanColumn key={status} status={status} orders={orders.filter((order) => order.status === status)} />)}
+              {ORDER_STATUSES.map((status) => <KanbanColumn key={status} status={status} orders={orders.filter((order) => order.status === status)} onSelect={showHistory} />)}
             </section>
             <DragOverlay>{activeOrder ? <OrderCard order={activeOrder} dragging /> : null}</DragOverlay>
           </DndContext>
+          {selectedOrder && <OrderHistoryPanel order={selectedOrder} entries={history} loading={historyLoading} error={historyError} onClose={() => setSelectedOrder(null)} />}
         </div>
       </main>
     </div>
@@ -164,14 +192,24 @@ function CreateOrderForm({ products, onCreated, onError }: { products: Product[]
   </form>;
 }
 
-function KanbanColumn({ status, orders }: { status: OrderStatus; orders: Order[] }) {
+function KanbanColumn({ status, orders, onSelect }: { status: OrderStatus; orders: Order[]; onSelect: (order: Order) => void }) {
   const { isOver, setNodeRef } = useDroppable({ id: status });
-  return <div ref={setNodeRef} className={`kanban-column ${isOver ? "is-over" : ""}`}><div className="column-heading"><span className={`column-dot ${statusColors[status]}`} /><h3>{statusLabels[status]}</h3><b>{orders.length}</b></div><div className="column-cards">{orders.map((order) => <OrderCard key={order.id} order={order} />)}{orders.length === 0 && <div className="empty-column">Suelta aquí tus pedidos</div>}</div></div>;
+  return <div ref={setNodeRef} className={`kanban-column ${isOver ? "is-over" : ""}`}><div className="column-heading"><span className={`column-dot ${statusColors[status]}`} /><h3>{statusLabels[status]}</h3><b>{orders.length}</b></div><div className="column-cards">{orders.map((order) => <OrderCard key={order.id} order={order} onSelect={onSelect} />)}{orders.length === 0 && <div className="empty-column">Suelta aquí tus pedidos</div>}</div></div>;
 }
 
-function OrderCard({ order, dragging = false }: { order: Order; dragging?: boolean }) {
+function OrderCard({ order, dragging = false, onSelect }: { order: Order; dragging?: boolean; onSelect?: (order: Order) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: order.id, data: { status: order.status } });
-  return <article ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }} className={`order-card ${isDragging || dragging ? "is-dragging" : ""}`} {...listeners} {...attributes}><div className="order-card-header"><span className="order-number">{order.orderNumber}</span><span className={`priority-dot ${statusColors[order.status]}`} /></div><strong className="customer">{order.customerName}</strong><div className="order-card-footer"><span>{money.format(Number(order.total))}</span><span className="drag-hint" aria-label="Arrastrar pedido">⋮⋮</span></div></article>;
+  return <article ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }} className={`order-card ${isDragging || dragging ? "is-dragging" : ""}`} onClick={() => onSelect?.(order)} {...listeners} {...attributes} aria-label={`Ver historial de ${order.orderNumber}`}><div className="order-card-header"><span className="order-number">{order.orderNumber}</span><span className={`priority-dot ${statusColors[order.status]}`} /></div><strong className="customer">{order.customerName}</strong><div className="order-card-footer"><span>{money.format(Number(order.total))}</span><span className="drag-hint" aria-label="Arrastrar pedido">⋮⋮</span></div></article>;
+}
+
+function OrderHistoryPanel({ order, entries, loading, error, onClose }: { order: Order; entries: StatusHistoryEntry[]; loading: boolean; error: string | null; onClose: () => void }) {
+  return <section className="history-panel" aria-label={`Historial de ${order.orderNumber}`}>
+    <div className="history-header"><div><span className="eyebrow">ACTIVIDAD DEL PEDIDO</span><h2>{order.orderNumber}</h2><p>{order.customerName}</p></div><button className="secondary-button" onClick={onClose} aria-label="Cerrar historial">Cerrar</button></div>
+    {loading && <p className="history-state">Cargando actividad…</p>}
+    {error && <p className="history-state history-error" role="alert">{error}</p>}
+    {!loading && !error && entries.length === 0 && <p className="history-state">Este pedido aún no tiene cambios de estado.</p>}
+    {!loading && !error && entries.length > 0 && <ol className="history-list">{entries.map((entry) => <li key={entry.id}><span className={`history-dot ${statusColors[entry.newStatus]}`} /><div><strong>{statusLabels[entry.previousStatus]} → {statusLabels[entry.newStatus]}</strong><span>{entry.actorEmail}</span><time dateTime={entry.changedAt}>{new Date(entry.changedAt).toLocaleString("es-MX")}</time></div></li>)}</ol>}
+  </section>;
 }
 
 function Kpi({ icon, label, value, trend, tone }: { icon: string; label: string; value: string; trend: string; tone: string }) {

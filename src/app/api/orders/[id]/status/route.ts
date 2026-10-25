@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { updateOrderStatusSchema } from "@application/dtos/order.dto";
-import { updateOrderStatus } from "@application/use-cases/update-order-status";
+import { InvalidOrderTransitionError, updateOrderStatus } from "@application/use-cases/update-order-status";
 import { getSession } from "@lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  if (!(await getSession())) {
+  const session = await getSession();
+  if (!session) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   const parsed = updateOrderStatusSchema.safeParse(await request.json());
@@ -14,7 +15,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
   }
 
-  const order = await updateOrderStatus(params.id, parsed.data.status);
+  let order;
+  try {
+    order = await updateOrderStatus(params.id, parsed.data.status, session.email);
+  } catch (error) {
+    if (error instanceof InvalidOrderTransitionError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
