@@ -7,9 +7,10 @@ const MAX_LINES = 50;
 const MAX_QUANTITY = 1000;
 type Line = { product: Product; quantity: number };
 
-export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Order) => void; onClose: () => void }) {
-  const [customerName, setCustomerName] = useState("");
+export function CreateOrderModal({ onCreated, onClose, order }: { onCreated: (order: Order) => void; onClose: () => void; order?: Order }) {
+  const [customerName, setCustomerName] = useState(order?.customerName ?? "");
   const [lines, setLines] = useState<Line[]>([]);
+  const [loadingOrder, setLoadingOrder] = useState(Boolean(order));
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
@@ -29,6 +30,24 @@ export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Or
       .catch((error) => { if (error.name !== "AbortError") { setResults([]); setSearching(false); } });
     return () => controller.abort();
   }, [debouncedQuery, searchOpen]);
+
+  useEffect(() => {
+    if (!order) return;
+    const controller = new AbortController();
+    fetch(`/api/orders/${order.id}`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("No se pudieron cargar las líneas del pedido.")))
+      .then((detail: { items: { productId: string; name: string; sku: string; unitPrice: string; quantity: number; stock: number }[] }) => {
+        setLines(detail.items.map((item) => ({
+          product: { id: item.productId, name: item.name, sku: item.sku, price: item.unitPrice, stock: item.stock + item.quantity },
+          quantity: item.quantity,
+        })));
+        setLoadingOrder(false);
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") { setFormError("No se pudieron cargar las líneas del pedido."); setLoadingOrder(false); }
+      });
+    return () => controller.abort();
+  }, [order]);
 
   const total = useMemo(() => lines.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0), [lines]);
   const overStock = lines.filter((line) => line.quantity > line.product.stock);
@@ -55,8 +74,8 @@ export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Or
     setSubmitting(true);
     setFormError("");
     try {
-      const response = await fetch("/api/orders", {
-        method: "POST",
+      const response = await fetch(order ? `/api/orders/${order.id}` : "/api/orders", {
+        method: order ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customerName, items: lines.map((line) => ({ productId: line.product.id, quantity: line.quantity })) }),
       });
@@ -72,8 +91,8 @@ export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Or
   }
 
   return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-order-title">
-      <div className="modal-header"><div><h2 id="new-order-title">Nuevo pedido</h2><p>Busca productos y ajusta cantidades. Hasta {MAX_LINES} líneas por pedido.</p></div><button className="icon-button" type="button" aria-label="Cerrar formulario" onClick={onClose}>×</button></div>
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-order-title" aria-busy={loadingOrder}>
+      <div className="modal-header"><div><h2 id="new-order-title">{order ? `Editar ${order.orderNumber}` : "Nuevo pedido"}</h2><p>{order ? "Solo se editan pedidos pendientes. Los precios existentes se conservan." : `Busca productos y ajusta cantidades. Hasta ${MAX_LINES} líneas por pedido.`}</p></div><button className="icon-button" type="button" aria-label="Cerrar formulario" onClick={onClose}>×</button></div>
       <form className="create-order-form" onSubmit={submit}>
         <label className="field">Cliente<input autoFocus required minLength={2} maxLength={120} value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre del cliente" /></label>
         <div className="product-search">
@@ -87,7 +106,8 @@ export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Or
           </ul>}
         </div>
         <div className="order-lines" aria-label="Productos del pedido">
-          {lines.length === 0 && <p className="lines-empty">Aún no hay productos en el pedido.</p>}
+          {loadingOrder && <p className="lines-empty">Cargando productos del pedido…</p>}
+          {!loadingOrder && lines.length === 0 && <p className="lines-empty">Aún no hay productos en el pedido.</p>}
           {lines.map((line, index) => <div className="order-line" key={line.product.id}>
             <div className="line-product"><strong>{line.product.name}</strong><small>{money.format(Number(line.product.price))} · stock {line.product.stock}</small>{line.quantity > line.product.stock && <small className="line-warning">Excede el stock disponible</small>}</div>
             <input className="line-qty" required aria-label={`Cantidad ${index + 1}`} type="number" min="1" max={MAX_QUANTITY} value={line.quantity} onChange={(event) => setQuantity(line.product.id, event.target.value)} />
@@ -100,7 +120,7 @@ export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Or
         {formError && <div className="form-error" role="alert">{formError}</div>}
         <div className="form-actions">
           <button className="secondary-button" type="button" onClick={onClose}>Cancelar</button>
-          <button className="primary-button inline" type="submit" disabled={submitting || lines.length === 0}>{submitting ? "Guardando…" : "Crear pedido"}</button>
+          <button className="primary-button inline" type="submit" disabled={submitting || loadingOrder || lines.length === 0}>{submitting ? "Guardando…" : order ? "Guardar cambios" : "Crear pedido"}</button>
         </div>
       </form>
     </div>

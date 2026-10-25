@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     limit: searchParams.get("limit") || undefined,
     page: searchParams.get("page") || undefined,
     includeInactive: searchParams.get("includeInactive") || undefined,
+    lowStockOnly: searchParams.get("lowStockOnly") || undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid query parameters" }, { status: 400 });

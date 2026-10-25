@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Alerts, Icon, fetchJson, money, useAutoDismiss, useDebounced, useEscape } from "../shared";
 import { useCan } from "../role-context";
 
-type CatalogProduct = { id: string; sku: string; name: string; price: string; cost: string; stock: number; active: boolean };
-type ProductPage = { items: CatalogProduct[]; total: number; page: number; limit: number };
+type CatalogProduct = { id: string; sku: string; name: string; price: string; cost: string; stock: number; lowStockThreshold: number; active: boolean };
+type ProductPage = { items: CatalogProduct[]; total: number; page: number; limit: number; lowStockTotal: number };
 type Editor = { mode: "create" } | { mode: "edit"; product: CatalogProduct } | { mode: "stock"; product: CatalogProduct };
 
 const PAGE_SIZE = 20;
@@ -15,6 +15,7 @@ export function ProductsView() {
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [lowStockOnly, setLowStockOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ProductPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,18 +26,18 @@ export function ProductsView() {
   const clearNotice = useCallback(() => setNotice(null), []);
   useAutoDismiss(notice, clearNotice);
 
-  useEffect(() => { setPage(1); }, [q, includeInactive]);
+  useEffect(() => { setPage(1); }, [q, includeInactive, lowStockOnly]);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page), includeInactive: String(canWrite && includeInactive) });
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page), includeInactive: String(canWrite && includeInactive), lowStockOnly: String(lowStockOnly) });
     if (q) params.set("q", q);
     fetchJson<ProductPage>(`/api/products?${params}`, { signal: controller.signal })
       .then((result) => { setData(result); setLoading(false); })
       .catch((err) => { if (err.name !== "AbortError") { setError("No se pudo cargar el catálogo."); setLoading(false); } });
     return () => controller.abort();
-  }, [q, page, includeInactive, canWrite, reloadToken]);
+  }, [q, page, includeInactive, lowStockOnly, canWrite, reloadToken]);
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   const items = data?.items ?? [];
@@ -55,13 +56,20 @@ export function ProductsView() {
     <section className="welcome-row">
       <div><p className="eyebrow">Catálogo</p><h1>Productos</h1><p className="subheading">{canWrite ? "Gestiona precios, estado e inventario con trazabilidad." : "Consulta el catálogo y el inventario disponible."}</p></div>
       <div className="welcome-actions">
+        <a className="secondary-button" href="/api/exports/products">Exportar CSV</a>
         {canWrite && <button className="primary-button inline" type="button" onClick={() => setEditor({ mode: "create" })}><Icon name="plus" />Nuevo producto</button>}
       </div>
     </section>
     <Alerts error={error} notice={notice} onClearError={() => setError(null)} onClearNotice={clearNotice} />
+    {Boolean(data?.lowStockTotal) && <div className="alert low-stock-alert" role="status">
+      <Icon name="warning" />
+      <span>{data?.lowStockTotal} {data?.lowStockTotal === 1 ? "producto requiere" : "productos requieren"} reposición por estar en su umbral de bajo stock.</span>
+      <button className="secondary-button" type="button" onClick={() => setLowStockOnly((value) => !value)}>{lowStockOnly ? "Ver todos" : "Revisar stock bajo"}</button>
+    </div>}
     <div className="toolbar">
       <span className="search-input"><Icon name="search" /><input aria-label="Buscar productos" placeholder="Busca por nombre o SKU" value={search} onChange={(event) => setSearch(event.target.value)} /></span>
       {canWrite && <label className="inline-check"><input type="checkbox" checked={includeInactive} onChange={(event) => setIncludeInactive(event.target.checked)} />Mostrar inactivos</label>}
+      <label className="inline-check"><input type="checkbox" checked={lowStockOnly} onChange={(event) => setLowStockOnly(event.target.checked)} />Solo stock bajo</label>
     </div>
     <section className="table-card" aria-label="Tabla de productos" aria-busy={loading}>
       <div className="table-scroll"><table className="orders-table products-table">
@@ -71,7 +79,7 @@ export function ProductsView() {
             <td>{product.sku}</td><td>{product.name}</td>
             <td className="num">{money.format(Number(product.price))}</td>
             {canWrite && <td className="num">{money.format(Number(product.cost))}</td>}
-            <td className="num">{product.stock.toLocaleString("es-MX")}</td>
+            <td className="num">{product.stock.toLocaleString("es-MX")}<small className="stock-threshold">Umbral {product.lowStockThreshold}</small></td>
             <td><span className={`pill ${product.active ? "pill-ok" : "pill-off"}`}>{product.active ? "Activo" : "Inactivo"}</span></td>
             {canWrite && <td><div className="row-actions">
               <button className="secondary-button" type="button" aria-label={`Editar ${product.name}`} onClick={() => setEditor({ mode: "edit", product })}>Editar</button>
@@ -99,6 +107,7 @@ function ProductDialog({ editor, onClose, onDone }: { editor: Editor; onClose: (
   const [price, setPrice] = useState(product?.price ?? "");
   const [cost, setCost] = useState(product?.cost ?? "");
   const [stock, setStock] = useState("0");
+  const [lowStockThreshold, setLowStockThreshold] = useState(String(product?.lowStockThreshold ?? 5));
   const [delta, setDelta] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -111,9 +120,9 @@ function ProductDialog({ editor, onClose, onDone }: { editor: Editor; onClose: (
     setSubmitting(true);
     setFormError("");
     const request = editor.mode === "create"
-      ? { url: "/api/products", method: "POST", body: { sku, name, price, cost, stock: Number(stock) }, done: "Producto creado." }
+      ? { url: "/api/products", method: "POST", body: { sku, name, price, cost, stock: Number(stock), lowStockThreshold: Number(lowStockThreshold) }, done: "Producto creado." }
       : editor.mode === "edit"
-        ? { url: `/api/products/${editor.product.id}`, method: "PATCH", body: { name, price, cost }, done: "Producto actualizado." }
+        ? { url: `/api/products/${editor.product.id}`, method: "PATCH", body: { name, price, cost, lowStockThreshold: Number(lowStockThreshold) }, done: "Producto actualizado." }
         : { url: `/api/products/${editor.product.id}/stock`, method: "POST", body: { delta: Number(delta), note: note || undefined }, done: "Stock ajustado." };
     try {
       const response = await fetch(request.url, { method: request.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.body) });
@@ -139,6 +148,7 @@ function ProductDialog({ editor, onClose, onDone }: { editor: Editor; onClose: (
           <label className="field">Costo<input required type="number" min="0" step="0.01" value={cost} onChange={(event) => setCost(event.target.value)} /></label>
         </>}
         {editor.mode === "create" && <label className="field">Stock inicial<input required type="number" min="0" step="1" value={stock} onChange={(event) => setStock(event.target.value)} /></label>}
+        {editor.mode !== "stock" && <label className="field">Umbral de bajo stock<input required type="number" min="0" max="1000000" step="1" value={lowStockThreshold} onChange={(event) => setLowStockThreshold(event.target.value)} /><small>Se alertará cuando el inventario sea igual o menor a este valor.</small></label>}
         {editor.mode === "stock" && <>
           <label className="field">Cantidad a sumar o restar<input autoFocus required type="number" step="1" value={delta} onChange={(event) => setDelta(event.target.value)} placeholder="Ej. 10 o -3" /></label>
           <label className="field">Motivo (opcional)<input maxLength={200} value={note} onChange={(event) => setNote(event.target.value)} /></label>

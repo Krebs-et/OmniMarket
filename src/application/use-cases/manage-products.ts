@@ -5,9 +5,13 @@ import { products, stockMovements } from "@infrastructure/db/schema";
 export class DuplicateSkuError extends Error {}
 export class InsufficientAdjustmentError extends Error {}
 
-export async function createProduct(input: { sku: string; name: string; price: string; cost: string; stock: number }, actorEmail: string) {
+export async function createProduct(input: { sku: string; name: string; price: string; cost: string; stock: number; lowStockThreshold?: number }, actorEmail: string) {
   return getDb().transaction(async (tx) => {
-    const [created] = await tx.insert(products).values({ ...input, sku: input.sku.toUpperCase() }).onConflictDoNothing({ target: products.sku }).returning();
+    const [created] = await tx.insert(products).values({
+      ...input,
+      lowStockThreshold: input.lowStockThreshold ?? 5,
+      sku: input.sku.toUpperCase(),
+    }).onConflictDoNothing({ target: products.sku }).returning();
     if (!created) throw new DuplicateSkuError("SKU already exists");
     if (created.stock > 0) {
       await tx.insert(stockMovements).values({ productId: created.id, delta: created.stock, stockAfter: created.stock, reason: "initial", actorEmail });
@@ -16,7 +20,7 @@ export async function createProduct(input: { sku: string; name: string; price: s
   });
 }
 
-export async function updateProduct(id: string, changes: { name?: string; price?: string; cost?: string; active?: boolean }) {
+export async function updateProduct(id: string, changes: { name?: string; price?: string; cost?: string; active?: boolean; lowStockThreshold?: number }) {
   const [updated] = await getDb().update(products).set({ ...changes, updatedAt: new Date() }).where(eq(products.id, id)).returning();
   return updated ?? null;
 }

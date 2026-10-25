@@ -13,16 +13,19 @@ export async function getProducts({ q, limit }: { q?: string; limit?: number } =
   return limit ? query.limit(limit) : query;
 }
 
-export async function listProducts({ q, limit, page, includeInactive }: { q?: string; limit: number; page: number; includeInactive: boolean }) {
+export async function listProducts({ q, limit, page, includeInactive, lowStockOnly = false }: { q?: string; limit: number; page: number; includeInactive: boolean; lowStockOnly?: boolean }) {
   const term = q?.trim();
   const pattern = term ? `%${term.replace(/[\\%_]/g, "\\$&")}%` : null;
   const where = and(
     includeInactive ? undefined : eq(products.active, true),
+    lowStockOnly ? sql`${products.stock} <= ${products.lowStockThreshold}` : undefined,
     pattern ? or(ilike(products.name, pattern), ilike(products.sku, pattern)) : undefined,
   );
-  const [items, [{ total }]] = await Promise.all([
+  const activeWhere = and(eq(products.active, true), sql`${products.stock} <= ${products.lowStockThreshold}`);
+  const [items, [{ total }], [{ lowStockTotal }]] = await Promise.all([
     getDb().select().from(products).where(where).orderBy(asc(products.name), asc(products.id)).limit(limit).offset((page - 1) * limit),
     getDb().select({ total: sql<number>`count(*)::int` }).from(products).where(where),
+    getDb().select({ lowStockTotal: sql<number>`count(*)::int` }).from(products).where(activeWhere),
   ]);
-  return { items, total, page, limit };
+  return { items, total, page, limit, lowStockTotal };
 }

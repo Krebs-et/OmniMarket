@@ -83,12 +83,13 @@ export const products = pgTable("products", {
   price: decimal("price", { precision: 12, scale: 2 }).notNull(),
   cost: decimal("cost", { precision: 12, scale: 2 }).notNull(),
   stock: integer("stock").notNull().default(0),
+  lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const stockMovementReason = pgEnum("stock_movement_reason", ["initial", "adjustment", "order", "cancellation"]);
+export const stockMovementReason = pgEnum("stock_movement_reason", ["initial", "adjustment", "order", "order_edit", "cancellation"]);
 
 export const stockMovements = pgTable("stock_movements", {
   id: uuid("id").defaultRandom().primaryKey(),

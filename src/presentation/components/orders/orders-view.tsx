@@ -41,6 +41,7 @@ export function OrdersView() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const columnsRef = useRef(columns);
@@ -190,6 +191,7 @@ export function OrdersView() {
       <div><p className="eyebrow">Operación</p><h1>Pedidos</h1><p className="subheading">{view === "board" ? (canWrite ? "Arrastra una tarjeta para cambiar su estado; toca una para ver su actividad." : "Modo de solo lectura: toca una tarjeta para ver su actividad.") : "Ordena, filtra y revisa todos los pedidos por página."}</p></div>
       <div className="welcome-actions">
         <button className="secondary-button" onClick={reload}><Icon name="refresh" />Actualizar</button>
+        <a className="secondary-button" href="/api/exports/orders">Exportar CSV</a>
         {canWrite && <button className="primary-button inline" type="button" onClick={() => setModalOpen(true)}><Icon name="plus" />Nuevo pedido</button>}
       </div>
     </section>
@@ -220,11 +222,16 @@ export function OrdersView() {
       <DragOverlay>{activeOrder ? <OrderCard order={activeOrder} dragging /> : null}</DragOverlay>
     </DndContext> : <OrdersTable page={table} loading={tableLoading} sort={sort} dir={dir} onSort={changeSort} selectedIds={selectedIds} onToggle={toggleSelection} onSelect={showHistory} onPage={setTablePage} />}
 
-    {selectedOrder && <OrderHistoryPanel order={selectedOrder} entries={history} loading={historyLoading} error={historyError} onClose={() => setSelectedOrder(null)} />}
+    {selectedOrder && <OrderHistoryPanel order={selectedOrder} entries={history} loading={historyLoading} error={historyError} onClose={() => setSelectedOrder(null)} onEdit={canWrite && selectedOrder.status === "PENDING" ? () => { setOrderToEdit(selectedOrder); setSelectedOrder(null); } : undefined} />}
     {modalOpen && <CreateOrderModal onClose={() => setModalOpen(false)} onCreated={(order) => {
       setModalOpen(false);
-      setNotice(`${order.orderNumber} creado correctamente.`);
+      setNotice(`${order.orderNumber} ${orderToEdit ? "actualizado" : "creado"} correctamente.`);
       setSearch("");
+      reload();
+    }} />}
+    {orderToEdit && <CreateOrderModal order={orderToEdit} onClose={() => setOrderToEdit(null)} onCreated={(order) => {
+      setOrderToEdit(null);
+      setNotice(`${order.orderNumber} actualizado correctamente.`);
       reload();
     }} />}
   </>;

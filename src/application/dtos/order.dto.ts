@@ -27,6 +27,7 @@ export const productSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   page: z.coerce.number().int().min(1).default(1),
   includeInactive: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  lowStockOnly: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 });
 
 const money = z.coerce.number().min(0).max(1_000_000).transform((value) => value.toFixed(2));
@@ -37,6 +38,7 @@ export const createProductSchema = z.object({
   price: money,
   cost: money,
   stock: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).default(5),
 });
 
 export const updateProductSchema = z.object({
@@ -44,6 +46,7 @@ export const updateProductSchema = z.object({
   price: money.optional(),
   cost: money.optional(),
   active: z.boolean().optional(),
+  lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).optional(),
 }).refine((value) => Object.keys(value).length > 0, "No changes provided");
 
 export const adjustStockSchema = z.object({
@@ -65,6 +68,12 @@ export const createOrderSchema = z.object({
       });
     }
   }),
+});
+
+export const editOrderSchema = createOrderSchema;
+
+export const updateUserRoleSchema = z.object({
+  role: z.enum(["admin", "operator", "viewer"]),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

@@ -9,19 +9,21 @@ import type { Role } from "@domain/value-objects/role";
 import { RoleProvider } from "./role-context";
 import { Icon } from "./shared";
 
-const sections: { href: Route; label: string; icon: string }[] = [
+const sections: { href: Route; label: string; icon: string; admin?: boolean }[] = [
   { href: "/", label: "Resumen", icon: "grid" },
   { href: "/orders", label: "Pedidos", icon: "layers" },
   { href: "/products", label: "Productos", icon: "box" },
   { href: "/analytics", label: "Analítica", icon: "chart" },
+  { href: "/users", label: "Usuarios", icon: "users", admin: true },
 ];
 
 const roleLabels: Record<Role, string> = { admin: "Administrador", operator: "Operador", viewer: "Lectura" };
 
 export function AppShell({ userEmail, role, children }: { userEmail: string; role: Role; children: React.ReactNode }) {
   const pathname = usePathname();
+  const visibleSections = sections.filter((section) => !section.admin || role === "admin");
   const [menuOpen, setMenuOpen] = useState(false);
-  const current = sections.find((section) => section.href === "/" ? pathname === "/" : pathname.startsWith(section.href)) ?? sections[0];
+  const current = visibleSections.find((section) => section.href === "/" ? pathname === "/" : pathname.startsWith(section.href)) ?? visibleSections[0];
 
   useEffect(() => setMenuOpen(false), [pathname]);
   useEffect(() => {
@@ -43,7 +45,7 @@ export function AppShell({ userEmail, role, children }: { userEmail: string; rol
       <aside className={`sidebar ${menuOpen ? "is-open" : ""}`} id="sidebar">
         <div className="brand"><span className="brand-mark small">O</span><span>OMNIMARKET</span></div>
         <nav className="main-nav" aria-label="Navegación principal">
-          {sections.map((section) => <Link key={section.href} className={`nav-item ${section === current ? "active" : ""}`} href={section.href} aria-current={section === current ? "page" : undefined}><Icon name={section.icon} />{section.label}</Link>)}
+          {visibleSections.map((section) => <Link key={section.href} className={`nav-item ${section === current ? "active" : ""}`} href={section.href} aria-current={section === current ? "page" : undefined}><Icon name={section.icon} />{section.label}</Link>)}
         </nav>
         <div className="sidebar-bottom"><div className="online"><span /> Sistema operativo</div><button className="nav-item logout" onClick={logout}><Icon name="logout" />Cerrar sesión</button></div>
       </aside>

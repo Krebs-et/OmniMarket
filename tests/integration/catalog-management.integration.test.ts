@@ -25,6 +25,7 @@ describe("catalog management", () => {
   it("creates products with an initial movement and rejects duplicate SKUs", async () => {
     const created = await createProduct({ sku: `${tag}-A`, name: "Catalog A", price: "10.00", cost: "5.00", stock: 12 }, actor);
     expect(created.active).toBe(true);
+    expect(created.lowStockThreshold).toBe(5);
     const movements = await movementsFor(created.id);
     expect(movements).toHaveLength(1);
     expect(movements[0]).toMatchObject({ delta: 12, stockAfter: 12, reason: "initial", actorEmail: actor });

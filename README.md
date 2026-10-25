@@ -52,9 +52,13 @@ pnpm build
 
 La UI utiliza Tailwind CSS como pipeline de estilos (`tailwind.config.ts`, `postcss.config.mjs` y `@tailwind` en `src/app/globals.css`). `globals.css` define los design tokens (variables CSS con contraste AA) y las clases semánticas del dashboard; las fuentes DM Sans y Manrope se cargan con `next/font`. Distribución responsiva: en ≤1100 px la barra lateral pasa a un menú off-canvas, el formulario de pedido es un modal ("Nuevo pedido"), el historial de actividad es un panel lateral (bottom sheet en móvil) y el Kanban usa scroll horizontal con snap; en touch el arrastre se activa con pulsación larga para no bloquear el scroll. Los indicadores se calculan con datos reales (sin tendencias ficticias).
 
-### Catálogo y migraciones
+### Catálogo, pedidos y exportaciones
 
-El esquema incluye `users`, `accounts`, `sessions` y `verification_tokens` para la integración OAuth, además de `products` y `order_items`, con índices para consultar pedidos por estado/fecha y líneas por pedido/producto. `GET /api/products` requiere una sesión autenticada y devuelve el catálogo ordenado por nombre.
+El esquema incluye `users`, `accounts`, `sessions` y `verification_tokens` para la integración OAuth, además de `products` y `order_items`, con índices para consultar pedidos por estado/fecha y líneas por pedido/producto. `GET /api/products` requiere una sesión autenticada y devuelve el catálogo ordenado por nombre. Cada producto tiene un umbral de stock bajo configurable (5 unidades de forma predeterminada); el catálogo permite filtrar productos bajo el umbral y exportar pedidos y productos como CSV.
+
+Los pedidos `PENDING` pueden editarse desde el panel de actividad. La edición conserva los precios y costos snapshot de líneas existentes, usa valores actuales del catálogo para nuevas líneas y ajusta las diferencias de inventario en la misma transacción, con un movimiento auditado `order_edit` por producto. Los pedidos que avanzaron de estado no son editables.
+
+Las exportaciones autenticadas están disponibles en `GET /api/exports/orders` y `GET /api/exports/products`. El CSV protege celdas que podrían interpretarse como fórmulas en una hoja de cálculo.
 
 `POST /api/orders` requiere sesión y acepta:
 
@@ -73,7 +77,7 @@ Cada transición real de estado se registra en `order_status_history` con estado
 
 ## Escalabilidad y navegación
 
-La aplicación tiene cuatro rutas dedicadas: `/` (Resumen), `/orders` (Tablero/Tabla), `/products` (catálogo) y `/analytics`. Los roles son `admin` (todo), `operator` (pedidos; catálogo en lectura) y `viewer` (solo lectura); se asignan con `ADMIN_EMAILS` (separados por comas) o con `users.role`, y los usuarios nuevos entran como `viewer`. En desarrollo existen las cuentas demo `demo@`, `operator@` y `viewer@omnimarket.local`. El catálogo usa baja lógica y cada cambio de inventario queda en `stock_movements`. `GET /api/orders` admite `status`, `q`, `sort` (`created|total|customer`), `dir`, `page` y `limit`; `GET /api/products` admite `q` y `limit`. El Kanban se adapta al ancho (6, 3, 2 o 1 columnas según la ventana, sin scroll horizontal ni interno), muestra 4 pedidos por columna con un borde difuminado y el botón "Ver más (N)", y el total real; la tabla pagina y ordena en servidor. `PATCH /api/orders/status` actualiza hasta 100 pedidos por conjuntos en una transacción y reporta fallos parciales. El modal de nuevo pedido busca productos en servidor y admite hasta 50 líneas.
+La aplicación tiene cinco rutas dedicadas: `/` (Resumen), `/orders` (Tablero/Tabla), `/products` (catálogo), `/analytics` y `/users` (gestión de usuarios, solo admin). Los roles son `admin` (todo), `operator` (pedidos; catálogo en lectura) y `viewer` (solo lectura); se asignan con `ADMIN_EMAILS` (separados por comas) o con `users.role`, y los usuarios nuevos entran como `viewer`. Los administradores pueden cambiar el rol de otros usuarios; las cuentas incluidas en `ADMIN_EMAILS`, el cambio del propio rol y la eliminación del último administrador efectivo están protegidos. En desarrollo existen las cuentas demo `demo@`, `operator@` y `viewer@omnimarket.local`. El catálogo usa baja lógica y cada cambio de inventario queda en `stock_movements`. `GET /api/orders` admite `status`, `q`, `sort` (`created|total|customer`), `dir`, `page` y `limit`; `GET /api/products` admite `q`, `limit`, `page`, `includeInactive` y `lowStockOnly`. El Kanban se adapta al ancho (6, 3, 2 o 1 columnas según la ventana, sin scroll horizontal ni interno), muestra 4 pedidos por columna con un borde difuminado y el botón "Ver más (N)", y el total real; la tabla pagina y ordena en servidor. `PATCH /api/orders/status` actualiza hasta 100 pedidos por conjuntos en una transacción y reporta fallos parciales. El modal de nuevo pedido busca productos en servidor y admite hasta 50 líneas.
 
 En el dashboard, selecciona cualquier tarjeta del Kanban para abrir su panel de actividad y revisar las transiciones registradas.
 
@@ -84,7 +88,7 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
-La suite actual tiene 7 pruebas unitarias, 9 de integración y 11 E2E (incluye verificación de overflow en móvil/tablet/desktop y menú móvil). Las pruebas OAuth externas y el rate limiting real requieren configurar proveedores y Upstash; esas dependencias no se verifican localmente sin sus credenciales.
+La suite incluye pruebas unitarias, de integración y E2E (incluye verificación de overflow en móvil/tablet/desktop y menú móvil). Las pruebas de integración requieren una base PostgreSQL aislada y migrada; nunca deben ejecutarse contra RDS de producción. Las pruebas OAuth externas y el rate limiting real requieren configurar proveedores y Upstash; esas dependencias no se verifican localmente sin sus credenciales.
 
 ## Primer despliegue en Vercel
 

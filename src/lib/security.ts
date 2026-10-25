@@ -28,8 +28,13 @@ export function getClientIp(request: Pick<NextRequest, "headers">) {
 export function isKnownApiPath(pathname: string) {
   return pathname === "/api/orders"
     || pathname === "/api/orders/status"
+    || /^\/api\/orders\/[0-9a-f-]+$/i.test(pathname)
     || pathname === "/api/analytics"
     || pathname === "/api/products"
+    || pathname === "/api/exports/orders"
+    || pathname === "/api/exports/products"
+    || pathname === "/api/users"
+    || /^\/api\/users\/[^/]+\/role$/i.test(pathname)
     || /^\/api\/products\/[0-9a-f-]+(\/stock)?$/i.test(pathname)
     || pathname === "/api/health"
     || /^\/api\/orders\/[0-9a-f-]+\/(status|history)$/i.test(pathname)
