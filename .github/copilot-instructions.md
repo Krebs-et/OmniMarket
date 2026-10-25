@@ -52,6 +52,8 @@ Authorization is role-based (`admin`, `operator`, `viewer`; `src/domain/value-ob
 
 The project currently has 18 unit tests, 21 integration tests, and 19 E2E tests. OAuth callbacks and Upstash behavior still require deployment credentials for external verification. Do not claim a latency SLA that has not been measured. Performance targets must state endpoint, dataset, environment, sample count, and percentile.
 
+Run `pnpm bench` (local PostgreSQL only) after query or index changes; never quote its numbers as an SLA.
+
 Deploy workflow (`.github/workflows/deploy.yml`): after CI succeeds on `main`, it migrates RDS (secret `PRODUCTION_DATABASE_URL`, never seed) and runs a read-only smoke test against production.
 
 ## Change protocol

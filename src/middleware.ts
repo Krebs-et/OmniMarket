@@ -23,7 +23,12 @@ function policy(nonce: string) {
   ].join("; ");
 }
 
-function withSecurityHeaders(response: NextResponse, csp: string) {
+function logSecurityEvent(event: string, request: NextRequest, status: number, requestId: string) {
+  console.warn(JSON.stringify({ level: "warn", event, status, method: request.method, path: request.nextUrl.pathname, requestId }));
+}
+
+function withSecurityHeaders(response: NextResponse, csp: string, requestId?: string) {
+  if (requestId) response.headers.set("X-Request-Id", requestId);
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -34,6 +39,7 @@ function withSecurityHeaders(response: NextResponse, csp: string) {
 
 export async function middleware(request: NextRequest) {
   const nonce = makeNonce();
+  const requestId = request.headers.get("x-vercel-id") ?? crypto.randomUUID();
   const csp = policy(nonce);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
@@ -41,7 +47,7 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   if (!pathname.startsWith("/api/") || pathname === "/api/health") {
-    return withSecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }), csp);
+    return withSecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }), csp, requestId);
   }
 
   if (!isKnownApiPath(pathname)) {
@@ -49,21 +55,23 @@ export async function middleware(request: NextRequest) {
       await recordUnknownApiPath(request);
     } catch (error) {
       console.error("Failed to record suspicious API path", error);
-      return withSecurityHeaders(NextResponse.json({ error: "Security service unavailable" }, { status: 503 }), csp);
+      return withSecurityHeaders(NextResponse.json({ error: "Security service unavailable" }, { status: 503 }), csp, requestId);
     }
-    return withSecurityHeaders(NextResponse.json({ error: "Not found" }, { status: 404 }), csp);
+    logSecurityEvent("unknown_api_path", request, 404, requestId);
+    return withSecurityHeaders(NextResponse.json({ error: "Not found" }, { status: 404 }), csp, requestId);
   }
 
   try {
     const result = await checkApiRequest(request);
     if (!result.allowed) {
+      logSecurityEvent("api_request_rejected", request, result.status, requestId);
       const response = NextResponse.json({ error: result.error }, { status: result.status });
       if (result.status === 429) {
         response.headers.set("X-RateLimit-Limit", String(result.limit));
         response.headers.set("X-RateLimit-Remaining", String(result.remaining));
         response.headers.set("X-RateLimit-Reset", String(result.reset));
       }
-      return withSecurityHeaders(response, csp);
+      return withSecurityHeaders(response, csp, requestId);
     }
 
     const response = NextResponse.next({ request: { headers: requestHeaders } });
@@ -72,10 +80,10 @@ export async function middleware(request: NextRequest) {
       response.headers.set("X-RateLimit-Remaining", String(result.remaining));
       response.headers.set("X-RateLimit-Reset", String(result.reset));
     }
-    return withSecurityHeaders(response, csp);
+    return withSecurityHeaders(response, csp, requestId);
   } catch (error) {
     console.error("API security middleware failed", error);
-    return withSecurityHeaders(NextResponse.json({ error: "Security service unavailable" }, { status: 503 }), csp);
+    return withSecurityHeaders(NextResponse.json({ error: "Security service unavailable" }, { status: 503 }), csp, requestId);
   }
 }
 

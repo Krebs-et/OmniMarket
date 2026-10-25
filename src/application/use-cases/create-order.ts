@@ -34,18 +34,24 @@ export async function createOrder(input: CreateOrderInput, actorEmail = "system"
       };
     });
 
-    const movements: { productId: string; delta: number; stockAfter: number }[] = [];
-    for (const item of lineItems) {
-      const [updatedProduct] = await tx.update(products)
-        .set({ stock: sql`${products.stock} - ${item.quantity}`, updatedAt: new Date() })
-        .where(and(eq(products.id, item.productId), gte(products.stock, item.quantity)))
-        .returning({ id: products.id, stock: products.stock });
-
-      if (!updatedProduct) {
-        throw new InsufficientStockError(`Insufficient stock for product ${item.productId}`);
-      }
-      movements.push({ productId: item.productId, delta: -item.quantity, stockAfter: updatedProduct.stock });
+    // Una sola sentencia condicionada por stock evita N viajes a la base de datos.
+    const values = sql.join(lineItems.map((item) => sql`(${item.productId}::uuid, ${item.quantity}::int)`), sql`, `);
+    const updated = await tx.execute<{ id: string; stock: number }>(sql`
+      update products p set stock = p.stock - v.qty, updated_at = now()
+      from (values ${values}) as v(id, qty)
+      where p.id = v.id and p.stock >= v.qty
+      returning p.id, p.stock`);
+    if (updated.length !== lineItems.length) {
+      const updatedIds = new Set(updated.map((row) => row.id));
+      const missing = lineItems.find((item) => !updatedIds.has(item.productId));
+      throw new InsufficientStockError(`Insufficient stock for product ${missing?.productId}`);
     }
+    const stockAfterById = new Map(updated.map((row) => [row.id, row.stock]));
+    const movements = lineItems.map((item) => ({
+      productId: item.productId,
+      delta: -item.quantity,
+      stockAfter: stockAfterById.get(item.productId) as number,
+    }));
 
     const total = lineItems.reduce((sum, item) => sum + Number(item.unitPrice) * item.quantity, 0).toFixed(2);
     const cost = lineItems.reduce((sum, item) => sum + Number(item.unitCost) * item.quantity, 0).toFixed(2);

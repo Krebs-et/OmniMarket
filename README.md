@@ -155,3 +155,18 @@ Los secretos deben configurarse únicamente en Vercel, AWS Secrets Manager o el 
 ## Despliegue y verificación en producción
 
 Vercel despliega desde Git. El flujo [`deploy.yml`](./.github/workflows/deploy.yml) se ejecuta cuando CI termina con éxito en `main` o `master` (o manualmente): aplica `pnpm db:migrate:deploy` a RDS y corre una verificación de humo de sólo lectura (`/api/health` 200, `/login` 200, `/api/orders` 401, `/api/nope` 404, cabeceras CSP y `X-RateLimit-*`). Requiere el secreto `PRODUCTION_DATABASE_URL` (entorno `production`, con `sslmode=require`), RDS accesible desde los runners de GitHub y, opcionalmente, la variable `PRODUCTION_URL`. Nunca ejecuta seed. Producción requiere `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`; sin ellos toda `/api/*` responde 503. El middleware vive en `src/middleware.ts`.
+
+## Rendimiento y observabilidad
+
+`pnpm bench` (requiere `BENCH_DATABASE_URL` apuntando a un PostgreSQL **local**; rechaza hosts remotos) siembra 20 000 pedidos, ~60 000 líneas y 1 000 productos y mide los casos de uso en secuencia (200 muestras, una conexión, sin red ni Next.js). Resultados en PostgreSQL 16 local (Docker):
+
+| Operación | p50 | p95 | p99 |
+|---|---|---|---|
+| `getOrders` página 1 / página 500 | 9 / 13 ms | 10 / 14 ms | 11 / 15 ms |
+| `getOrders` búsqueda `q` (índice trigram) | 15 ms | 17 ms | 18 ms |
+| `getAnalytics` | 14 ms | 16 ms | 16 ms |
+| `createOrder` 1 línea / 50 líneas | 20 / 50 ms | 22 / 53 ms | 24 / 54 ms |
+
+Estas cifras no incluyen latencia de red a RDS ni Vercel y no constituyen un SLA. Optimizaciones derivadas: el descuento de stock de `createOrder` es una sola sentencia set-based (50 líneas: 213 → 50 ms) y la migración `0005` añade índices GIN `pg_trgm` para las búsquedas `ILIKE` (búsqueda de pedidos: 52 → 15 ms).
+
+Observabilidad: el middleware añade `X-Request-Id` (usa `x-vercel-id` si existe) y registra en JSON los rechazos de seguridad (`api_request_rejected`, `unknown_api_path`); `/api/health` incluye `databaseLatencyMs`. Los logs se consultan en Vercel.

@@ -11,6 +11,7 @@
     "vercel-build": "pnpm build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "bench": "tsx scripts/benchmark.ts",
     "db:seed": "tsx src/infrastructure/db/seed.ts",
     "db:migrate:deploy": "drizzle-kit migrate",
     "test": "vitest run tests/*.test.ts",

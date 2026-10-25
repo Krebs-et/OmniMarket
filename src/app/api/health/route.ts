@@ -5,9 +5,10 @@ import { getDb } from "@infrastructure/db/client";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const start = performance.now();
   try {
     await getDb().execute(sql`select 1`);
-    return NextResponse.json({ status: "ok", database: "ok" });
+    return NextResponse.json({ status: "ok", database: "ok", databaseLatencyMs: Math.round(performance.now() - start) });
   } catch (error) {
     console.error("Health check failed", error);
     return NextResponse.json({ status: "error", database: "unavailable" }, { status: 503 });
