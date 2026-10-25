@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { bulkUpdateStatusSchema } from "@application/dtos/order.dto";
 import { updateOrdersStatus } from "@application/use-cases/update-orders-status";
-import { getSession } from "@lib/auth";
-import { recordAuthenticationFailure } from "@lib/security";
+import { authorize } from "@lib/authorize";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request) {
-  const session = await getSession();
-  if (!session) {
-    await recordAuthenticationFailure(request);
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const access = await authorize(request, "orders:write");
+  if ("response" in access) return access.response;
+  const session = access.session;
   const parsed = bulkUpdateStatusSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid bulk status payload" }, { status: 400 });

@@ -2,16 +2,13 @@ import { NextResponse } from "next/server";
 import { createOrderSchema, listOrdersQuerySchema } from "@application/dtos/order.dto";
 import { createOrder, InsufficientStockError, ProductNotFoundError } from "@application/use-cases/create-order";
 import { getOrders } from "@application/use-cases/get-orders";
-import { getSession } from "@lib/auth";
-import { recordAuthenticationFailure } from "@lib/security";
+import { authorize } from "@lib/authorize";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!(await getSession())) {
-    await recordAuthenticationFailure(request);
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const access = await authorize(request, "orders:read");
+  if ("response" in access) return access.response;
   const { searchParams } = new URL(request.url);
   const parsed = listOrdersQuerySchema.safeParse(Object.fromEntries(
     ["page", "limit", "status", "q", "sort", "dir"].map((key) => [key, searchParams.get(key) || undefined]),
@@ -25,10 +22,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await getSession())) {
-    await recordAuthenticationFailure(request);
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const access = await authorize(request, "orders:write");
+  if ("response" in access) return access.response;
 
   const parsed = createOrderSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -36,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await createOrder(parsed.data), { status: 201 });
+    return NextResponse.json(await createOrder(parsed.data, access.session.email), { status: 201 });
   } catch (error) {
     if (error instanceof ProductNotFoundError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

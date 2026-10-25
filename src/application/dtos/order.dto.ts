@@ -25,6 +25,30 @@ export const bulkUpdateStatusSchema = z.object({
 export const productSearchSchema = z.object({
   q: z.string().trim().max(100).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+  page: z.coerce.number().int().min(1).default(1),
+  includeInactive: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+});
+
+const money = z.coerce.number().min(0).max(1_000_000).transform((value) => value.toFixed(2));
+
+export const createProductSchema = z.object({
+  sku: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9._-]+$/, "Invalid SKU"),
+  name: z.string().trim().min(2).max(160),
+  price: money,
+  cost: money,
+  stock: z.coerce.number().int().min(0).max(1_000_000).default(0),
+});
+
+export const updateProductSchema = z.object({
+  name: z.string().trim().min(2).max(160).optional(),
+  price: money.optional(),
+  cost: money.optional(),
+  active: z.boolean().optional(),
+}).refine((value) => Object.keys(value).length > 0, "No changes provided");
+
+export const adjustStockSchema = z.object({
+  delta: z.number().int().min(-1_000_000).max(1_000_000).refine((value) => value !== 0, "Delta must not be zero"),
+  note: z.string().trim().max(200).optional(),
 });
 
 export const createOrderSchema = z.object({

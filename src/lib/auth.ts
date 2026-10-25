@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { auth } from "../../auth";
+import { resolveRole } from "@application/use-cases/resolve-role";
 
 const SESSION_COOKIE = "omnimarket_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
@@ -43,9 +44,10 @@ export function verifySession(token: string | undefined) {
 
 export async function getSession() {
   const oauthSession = await auth();
-  if (oauthSession?.user?.email) return { email: oauthSession.user.email };
+  if (oauthSession?.user?.email) return { email: oauthSession.user.email, role: await resolveRole(oauthSession.user.email) };
   if (process.env.NODE_ENV === "production" || process.env.APP_ENV === "production") return null;
-  return verifySession((await cookies()).get(SESSION_COOKIE)?.value);
+  const demo = verifySession((await cookies()).get(SESSION_COOKIE)?.value);
+  return demo ? { email: demo.email, role: await resolveRole(demo.email) } : null;
 }
 
 export function sessionCookie(token: string) {

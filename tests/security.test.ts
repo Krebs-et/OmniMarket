@@ -7,6 +7,9 @@ describe("API security policy", () => {
     expect(isKnownApiPath("/api/orders/7fda3e1a-9b61-48bd-a0e8-d540f71894de/history")).toBe(true);
     expect(isKnownApiPath("/api/orders/status")).toBe(true);
     expect(isKnownApiPath("/api/auth/callback/google")).toBe(true);
+    expect(isKnownApiPath("/api/products/7fda3e1a-9b61-48bd-a0e8-d540f71894de")).toBe(true);
+    expect(isKnownApiPath("/api/products/7fda3e1a-9b61-48bd-a0e8-d540f71894de/stock")).toBe(true);
+    expect(isKnownApiPath("/api/products/not-a-uuid/stock")).toBe(false);
   });
 
   it("does not treat proposed test-only endpoints as implemented routes", () => {

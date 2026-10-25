@@ -30,6 +30,7 @@ export function isKnownApiPath(pathname: string) {
     || pathname === "/api/orders/status"
     || pathname === "/api/analytics"
     || pathname === "/api/products"
+    || /^\/api\/products\/[0-9a-f-]+(\/stock)?$/i.test(pathname)
     || pathname === "/api/health"
     || /^\/api\/orders\/[0-9a-f-]+\/(status|history)$/i.test(pathname)
     || pathname.startsWith("/api/auth/");

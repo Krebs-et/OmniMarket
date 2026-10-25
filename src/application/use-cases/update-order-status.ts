@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@infrastructure/db/client";
-import { orderItems, orders, orderStatusHistory, products } from "@infrastructure/db/schema";
+import { orderItems, orders, orderStatusHistory, products, stockMovements } from "@infrastructure/db/schema";
 import type { OrderStatus } from "@domain/value-objects/order-status";
 
 export async function updateOrderStatus(id: string, status: OrderStatus, actorEmail: string) {
@@ -18,12 +18,23 @@ export async function updateOrderStatus(id: string, status: OrderStatus, actorEm
       if (currentOrder.status !== "CANCELLED") {
         const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, id));
         for (const item of items) {
-          await tx.update(products)
+          const [restocked] = await tx.update(products)
             .set({
               stock: sql`${products.stock} + ${item.quantity}`,
               updatedAt: new Date(),
             })
-            .where(eq(products.id, item.productId));
+            .where(eq(products.id, item.productId))
+            .returning({ stock: products.stock });
+          if (restocked) {
+            await tx.insert(stockMovements).values({
+              productId: item.productId,
+              orderId: id,
+              delta: item.quantity,
+              stockAfter: restocked.stock,
+              reason: "cancellation",
+              actorEmail,
+            });
+          }
         }
       }
     } else if (currentOrder.status === "CANCELLED") {

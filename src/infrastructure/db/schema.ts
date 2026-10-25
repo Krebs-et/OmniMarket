@@ -5,11 +5,14 @@ import {
   pgTable,
   primaryKey,
   index,
+  boolean,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+export const userRole = pgEnum("user_role", ["admin", "operator", "viewer"]);
 
 export const authUsers = pgTable("users", {
   id: text("id").primaryKey(),
@@ -17,6 +20,7 @@ export const authUsers = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("email_verified", { withTimezone: true }),
   image: text("image"),
+  role: userRole("role").notNull().default("viewer"),
 });
 
 export const authAccounts = pgTable("accounts", {
@@ -79,9 +83,26 @@ export const products = pgTable("products", {
   price: decimal("price", { precision: 12, scale: 2 }).notNull(),
   cost: decimal("cost", { precision: 12, scale: 2 }).notNull(),
   stock: integer("stock").notNull().default(0),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const stockMovementReason = pgEnum("stock_movement_reason", ["initial", "adjustment", "order", "cancellation"]);
+
+export const stockMovements = pgTable("stock_movements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+  delta: integer("delta").notNull(),
+  stockAfter: integer("stock_after").notNull(),
+  reason: stockMovementReason("reason").notNull(),
+  note: text("note"),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  productCreatedIdx: index("idx_stock_movements_product_created").on(table.productId, table.createdAt),
+}));
 
 export const orderItems = pgTable("order_items", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -136,5 +157,6 @@ export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one 
 
 export type Order = typeof orders.$inferSelect;
 export type Product = typeof products.$inferSelect;
+export type StockMovement = typeof stockMovements.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;

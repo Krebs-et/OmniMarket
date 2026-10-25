@@ -112,7 +112,7 @@ La primera entrega del Sprint 2 incorpora:
 - `order_items` con referencias a pedido y producto, cantidades y snapshots de precio/costo.
 - Índices para estado/fecha de pedidos y referencias de líneas.
 - Seed local determinista de seis productos y seis líneas de pedido.
-- `GET /api/products` (`q`, `limit`), protegido por la sesión existente. `GET /api/orders` pagina y filtra (`status`, `q`, `sort`, `dir`, `page`, `limit`); la analítica se agrega en SQL; la UI se divide en `/`, `/orders` y `/analytics`.
+- `GET/POST /api/products`, `PATCH /api/products/:id` y `POST /api/products/:id/stock`, protegidos por rol (`catalog:read`/`catalog:write`); el listado pagina (`q`, `page`, `limit`). `GET /api/orders` pagina y filtra (`status`, `q`, `sort`, `dir`, `page`, `limit`); la analítica se agrega en SQL; la UI se divide en `/`, `/orders` y `/analytics`.
 - `POST /api/orders` con validación Zod y transacción atómica de pedido y líneas usando precios/costos del catálogo.
 - Control de inventario: permite múltiples productos sin duplicados, descuenta stock con una condición SQL atómica y revierte toda la transacción ante stock insuficiente (`409`).
 - Cancelación segura: `PENDING`, `CONFIRMED` y `PROCESSING` reintegran líneas al stock en una transacción; repetir la cancelación no duplica inventario y `SHIPPED`/`DELIVERED` responden `409`.

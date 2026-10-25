@@ -29,6 +29,13 @@
       "when": 1792903080813,
       "tag": "0003_broken_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792944845151,
+      "tag": "0004_rare_rhodey",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, KeyboardSensor, 
 import { CSS } from "@dnd-kit/utilities";
 import { ORDER_STATUSES, type OrderStatus } from "@domain/value-objects/order-status";
 import { Alerts, Icon, fetchJson, money, statusColors, statusLabels, statusSingular, useAutoDismiss, useDebounced, type Order, type OrderPage } from "../shared";
+import { useCan } from "../role-context";
 import { CreateOrderModal } from "./create-order-modal";
 import { OrderHistoryPanel, type StatusHistoryEntry } from "./order-history-panel";
 
@@ -19,6 +20,7 @@ const emptyColumns = (): Columns => Object.fromEntries(ORDER_STATUSES.map((statu
 const buildQuery = (params: Record<string, string | number | undefined>) => new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== "").map(([key, value]) => [key, String(value)])).toString();
 
 export function OrdersView() {
+  const canWrite = useCan("orders:write");
   const [view, setView] = useState<"board" | "table">("board");
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
@@ -48,9 +50,9 @@ export function OrdersView() {
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
-    useSensor(KeyboardSensor),
+    useSensor(MouseSensor, { activationConstraint: canWrite ? { distance: 8 } : { distance: Number.MAX_SAFE_INTEGER } }),
+    useSensor(TouchSensor, { activationConstraint: canWrite ? { delay: 250, tolerance: 8 } : { delay: Number.MAX_SAFE_INTEGER, tolerance: 0 } }),
+    useSensor(KeyboardSensor, canWrite ? undefined : { keyboardCodes: { start: [], cancel: [], end: [] } }),
   );
 
   useEffect(() => { setTablePage(1); }, [q, tableStatus, sort, dir]);
@@ -185,10 +187,10 @@ export function OrdersView() {
 
   return <>
     <section className="welcome-row">
-      <div><p className="eyebrow">Operación</p><h1>Pedidos</h1><p className="subheading">{view === "board" ? "Arrastra una tarjeta para cambiar su estado; toca una para ver su actividad." : "Ordena, filtra y revisa todos los pedidos por página."}</p></div>
+      <div><p className="eyebrow">Operación</p><h1>Pedidos</h1><p className="subheading">{view === "board" ? (canWrite ? "Arrastra una tarjeta para cambiar su estado; toca una para ver su actividad." : "Modo de solo lectura: toca una tarjeta para ver su actividad.") : "Ordena, filtra y revisa todos los pedidos por página."}</p></div>
       <div className="welcome-actions">
         <button className="secondary-button" onClick={reload}><Icon name="refresh" />Actualizar</button>
-        <button className="primary-button inline" type="button" onClick={() => setModalOpen(true)}><Icon name="plus" />Nuevo pedido</button>
+        {canWrite && <button className="primary-button inline" type="button" onClick={() => setModalOpen(true)}><Icon name="plus" />Nuevo pedido</button>}
       </div>
     </section>
     <Alerts error={error} notice={notice} onClearError={() => setError(null)} onClearNotice={clearNotice} />
@@ -201,7 +203,7 @@ export function OrdersView() {
       {view === "table" && <label className="toolbar-filter">Estado<select aria-label="Filtrar por estado" value={tableStatus} onChange={(event) => setTableStatus(event.target.value as OrderStatus | "")}><option value="">Todos</option>{ORDER_STATUSES.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select></label>}
       {view === "board" && <span className="toolbar-count">{totalOrders.toLocaleString("es-MX")} pedidos{q ? " coinciden" : ""}</span>}
     </div>
-    {selectedIds.size > 0 && <div className="bulk-toolbar" aria-label="Edición en lote">
+    {canWrite && selectedIds.size > 0 && <div className="bulk-toolbar" aria-label="Edición en lote">
       <strong>{selectedIds.size} pedidos seleccionados</strong>
       <label>Nuevo estado<select aria-label="Nuevo estado para selección" value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value as OrderStatus | "")}>
         <option value="">Selecciona un estado</option>
@@ -212,7 +214,7 @@ export function OrdersView() {
     </div>}
 
     {view === "board" ? <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveOrder(null)}>
-      <section className="board" aria-label="Tablero Kanban de pedidos" aria-busy={anyColumnLoading}>
+      <section className="board" data-readonly={canWrite ? undefined : "true"} aria-label="Tablero Kanban de pedidos" aria-busy={anyColumnLoading}>
         {boardLoading ? <BoardSkeleton /> : ORDER_STATUSES.map((status) => <KanbanColumn key={status} status={status} column={columns[status]} onSelect={showHistory} selectedIds={selectedIds} onToggle={toggleSelection} onLoadMore={() => void loadMore(status)} />)}
       </section>
       <DragOverlay>{activeOrder ? <OrderCard order={activeOrder} dragging /> : null}</DragOverlay>
@@ -258,12 +260,13 @@ function BoardSkeleton() {
 }
 
 function OrdersTable({ page, loading, sort, dir, onSort, selectedIds, onToggle, onSelect, onPage }: { page: OrderPage | null; loading: boolean; sort: SortKey; dir: "asc" | "desc"; onSort: (key: SortKey) => void; selectedIds: Set<string>; onToggle: (ids: string[], selected: boolean) => void; onSelect: (order: Order) => void; onPage: (page: number) => void }) {
+  const canWrite = useCan("orders:write");
   const items = page?.items ?? [];
   const ids = items.map((order) => order.id);
   const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
   const pages = page ? Math.max(1, Math.ceil(page.total / page.limit)) : 1;
   const sortHeader = (key: SortKey, label: string) => <th aria-sort={sort === key ? (dir === "asc" ? "ascending" : "descending") : "none"}><button type="button" className="sort-button" onClick={() => onSort(key)}>{label}{sort === key ? (dir === "asc" ? " ↑" : " ↓") : ""}</button></th>;
-  return <section className="table-card" aria-label="Tabla de pedidos" aria-busy={loading}>
+  return <section className="table-card" data-readonly={canWrite ? undefined : "true"} aria-label="Tabla de pedidos" aria-busy={loading}>
     <div className="table-scroll"><table className="orders-table">
       <thead><tr>
         <th className="col-check"><input type="checkbox" aria-label="Seleccionar página" disabled={ids.length === 0} checked={allSelected} onChange={(event) => onToggle(ids, event.target.checked)} /></th>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { DEMO_ACCOUNTS } from "@application/use-cases/resolve-role";
 import { createSession, sessionCookie } from "@lib/auth";
 import { recordAuthenticationFailure } from "@lib/security";
 
@@ -10,10 +11,10 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
-  const expectedEmail = (process.env.DEMO_EMAIL ?? "demo@omnimarket.local").toLowerCase();
   const expectedPassword = process.env.DEMO_PASSWORD ?? "omnimarket";
+  const allowedEmails = [(process.env.DEMO_EMAIL ?? "demo@omnimarket.local").toLowerCase(), ...Object.keys(DEMO_ACCOUNTS)];
 
-  if (email !== expectedEmail || password !== expectedPassword) {
+  if (!allowedEmails.includes(email) || password !== expectedPassword) {
     await recordAuthenticationFailure(request);
     return NextResponse.json({ error: "Correo o contraseña incorrectos" }, { status: 401 });
   }

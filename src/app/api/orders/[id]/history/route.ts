@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { getOrderStatusHistory } from "@application/use-cases/get-order-status-history";
-import { getSession } from "@lib/auth";
-import { recordAuthenticationFailure } from "@lib/security";
+import { authorize } from "@lib/authorize";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  if (!(await getSession())) {
-    await recordAuthenticationFailure(request);
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const access = await authorize(request, "orders:read");
+  if ("response" in access) return access.response;
 
   return NextResponse.json(await getOrderStatusHistory(params.id));
 }

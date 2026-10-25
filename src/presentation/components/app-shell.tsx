@@ -5,15 +5,20 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import type { Role } from "@domain/value-objects/role";
+import { RoleProvider } from "./role-context";
 import { Icon } from "./shared";
 
 const sections: { href: Route; label: string; icon: string }[] = [
   { href: "/", label: "Resumen", icon: "grid" },
   { href: "/orders", label: "Pedidos", icon: "layers" },
+  { href: "/products", label: "Productos", icon: "box" },
   { href: "/analytics", label: "Analítica", icon: "chart" },
 ];
 
-export function AppShell({ userEmail, children }: { userEmail: string; children: React.ReactNode }) {
+const roleLabels: Record<Role, string> = { admin: "Administrador", operator: "Operador", viewer: "Lectura" };
+
+export function AppShell({ userEmail, role, children }: { userEmail: string; role: Role; children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const current = sections.find((section) => section.href === "/" ? pathname === "/" : pathname.startsWith(section.href)) ?? sections[0];
@@ -32,6 +37,7 @@ export function AppShell({ userEmail, children }: { userEmail: string; children:
   }
 
   return (
+    <RoleProvider value={role}>
     <div className="app-shell">
       {menuOpen && <div className="sidebar-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
       <aside className={`sidebar ${menuOpen ? "is-open" : ""}`} id="sidebar">
@@ -46,10 +52,11 @@ export function AppShell({ userEmail, children }: { userEmail: string; children:
           <button className="menu-button" type="button" aria-label="Abrir menú" aria-expanded={menuOpen} aria-controls="sidebar" onClick={() => setMenuOpen((open) => !open)}><Icon name="menu" /></button>
           <div className="mobile-brand"><span className="brand-mark small">O</span> OMNIMARKET</div>
           <div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{current.label}</strong></div>
-          <div className="topbar-actions"><span className="live-status"><i /> Datos en vivo</span><div className="avatar" title={userEmail} aria-label={`Sesión de ${userEmail}`}>{userEmail.slice(0, 2).toUpperCase()}</div></div>
+          <div className="topbar-actions"><span className="live-status"><i /> Datos en vivo</span><span className="role-badge">{roleLabels[role]}</span><div className="avatar" title={userEmail} aria-label={`Sesión de ${userEmail}`}>{userEmail.slice(0, 2).toUpperCase()}</div></div>
         </header>
         <div className="content">{children}</div>
       </main>
     </div>
+    </RoleProvider>
   );
 }

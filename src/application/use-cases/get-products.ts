@@ -1,4 +1,4 @@
-import { asc, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { getDb } from "@infrastructure/db/client";
 import { products } from "@infrastructure/db/schema";
 
@@ -8,7 +8,21 @@ export async function getProducts({ q, limit }: { q?: string; limit?: number } =
   const query = getDb()
     .select()
     .from(products)
-    .where(pattern ? or(ilike(products.name, pattern), ilike(products.sku, pattern)) : undefined)
+    .where(and(eq(products.active, true), pattern ? or(ilike(products.name, pattern), ilike(products.sku, pattern)) : undefined))
     .orderBy(asc(products.name));
   return limit ? query.limit(limit) : query;
+}
+
+export async function listProducts({ q, limit, page, includeInactive }: { q?: string; limit: number; page: number; includeInactive: boolean }) {
+  const term = q?.trim();
+  const pattern = term ? `%${term.replace(/[\\%_]/g, "\\$&")}%` : null;
+  const where = and(
+    includeInactive ? undefined : eq(products.active, true),
+    pattern ? or(ilike(products.name, pattern), ilike(products.sku, pattern)) : undefined,
+  );
+  const [items, [{ total }]] = await Promise.all([
+    getDb().select().from(products).where(where).orderBy(asc(products.name), asc(products.id)).limit(limit).offset((page - 1) * limit),
+    getDb().select({ total: sql<number>`count(*)::int` }).from(products).where(where),
+  ]);
+  return { items, total, page, limit };
 }

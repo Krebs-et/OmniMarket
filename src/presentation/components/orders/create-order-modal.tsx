@@ -25,7 +25,7 @@ export function CreateOrderModal({ onCreated, onClose }: { onCreated: (order: Or
     setSearching(true);
     fetch(`/api/products?limit=8&q=${encodeURIComponent(debouncedQuery)}`, { signal: controller.signal })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("search failed")))
-      .then((products: Product[]) => { setResults(products); setSearching(false); })
+      .then((data: { items: Product[] }) => { setResults(data.items); setSearching(false); })
       .catch((error) => { if (error.name !== "AbortError") { setResults([]); setSearching(false); } });
     return () => controller.abort();
   }, [debouncedQuery, searchOpen]);

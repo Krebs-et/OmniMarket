@@ -10,7 +10,7 @@ async function login(page: Page) {
 }
 
 async function createPendingOrder(page: Page) {
-  const products = (await (await page.request.get("/api/products?limit=50")).json()).filter((product: { stock: number }) => product.stock > 5);
+  const products = (await (await page.request.get("/api/products?limit=50")).json()).items.filter((product: { stock: number }) => product.stock > 5);
   const response = await page.request.post("/api/orders", { data: { customerName: `Pendiente E2E ${Date.now()}`, items: [{ productId: products[0].id, quantity: 1 }] } });
   expect(response.ok(), await response.text()).toBe(true);
 }
@@ -89,7 +89,7 @@ test("opens order activity history", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar al dashboard" }).click();
   await expect(page).toHaveURL(/\/$/);
   const customerName = `Historial E2E ${Date.now()}`;
-  const products = (await (await page.request.get("/api/products?limit=50")).json()).filter((product: { stock: number }) => product.stock > 5);
+  const products = (await (await page.request.get("/api/products?limit=50")).json()).items.filter((product: { stock: number }) => product.stock > 5);
   const created = await (await page.request.post("/api/orders", { data: { customerName, items: [{ productId: products[0].id, quantity: 1 }] } })).json();
   const moved = await page.request.patch(`/api/orders/${created.id}/status`, { data: { status: "PROCESSING" } });
   expect(moved.ok(), await moved.text()).toBe(true);

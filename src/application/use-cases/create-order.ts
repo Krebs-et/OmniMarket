@@ -1,6 +1,6 @@
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb } from "@infrastructure/db/client";
-import { orderItems, orders, products } from "@infrastructure/db/schema";
+import { orderItems, orders, products, stockMovements } from "@infrastructure/db/schema";
 import type { CreateOrderInput } from "@application/dtos/order.dto";
 
 function createOrderNumber() {
@@ -10,13 +10,13 @@ function createOrderNumber() {
 export class ProductNotFoundError extends Error {}
 export class InsufficientStockError extends Error {}
 
-export async function createOrder(input: CreateOrderInput) {
+export async function createOrder(input: CreateOrderInput, actorEmail = "system") {
   return getDb().transaction(async (tx) => {
     const productIds = [...new Set(input.items.map((item) => item.productId))];
     const selectedProducts = await tx.select().from(products).where(inArray(products.id, productIds));
     const productById = new Map(selectedProducts.map((product) => [product.id, product]));
 
-    if (selectedProducts.length !== productIds.length) {
+    if (selectedProducts.length !== productIds.length || selectedProducts.some((product) => !product.active)) {
       throw new ProductNotFoundError("One or more products were not found");
     }
 
@@ -34,15 +34,17 @@ export async function createOrder(input: CreateOrderInput) {
       };
     });
 
+    const movements: { productId: string; delta: number; stockAfter: number }[] = [];
     for (const item of lineItems) {
       const [updatedProduct] = await tx.update(products)
         .set({ stock: sql`${products.stock} - ${item.quantity}`, updatedAt: new Date() })
         .where(and(eq(products.id, item.productId), gte(products.stock, item.quantity)))
-        .returning({ id: products.id });
+        .returning({ id: products.id, stock: products.stock });
 
       if (!updatedProduct) {
         throw new InsufficientStockError(`Insufficient stock for product ${item.productId}`);
       }
+      movements.push({ productId: item.productId, delta: -item.quantity, stockAfter: updatedProduct.stock });
     }
 
     const total = lineItems.reduce((sum, item) => sum + Number(item.unitPrice) * item.quantity, 0).toFixed(2);
@@ -56,6 +58,12 @@ export async function createOrder(input: CreateOrderInput) {
     }).returning();
 
     await tx.insert(orderItems).values(lineItems.map((item) => ({ ...item, orderId: order.id })));
+    await tx.insert(stockMovements).values(movements.map((movement) => ({
+      ...movement,
+      orderId: order.id,
+      reason: "order" as const,
+      actorEmail,
+    })));
     return order;
   });
 }

@@ -1,6 +1,6 @@
 import { inArray, sql } from "drizzle-orm";
 import { getDb } from "@infrastructure/db/client";
-import { orderItems, orders, orderStatusHistory, products } from "@infrastructure/db/schema";
+import { orderItems, orders, orderStatusHistory, products, stockMovements } from "@infrastructure/db/schema";
 import type { OrderStatus } from "@domain/value-objects/order-status";
 
 export type BulkStatusFailure = { id: string; reason: "not_found" | "invalid_transition"; message: string };
@@ -27,14 +27,24 @@ export async function updateOrdersStatus(ids: string[], status: OrderStatus, act
     const changingIds = changing.map((order) => order.id);
 
     if (status === "CANCELLED") {
-      const restock = await tx
-        .select({ productId: orderItems.productId, quantity: sql<number>`sum(${orderItems.quantity})::int` })
+      const lines = await tx
+        .select({ orderId: orderItems.orderId, productId: orderItems.productId, quantity: sql<number>`sum(${orderItems.quantity})::int` })
         .from(orderItems)
         .where(inArray(orderItems.orderId, changingIds))
-        .groupBy(orderItems.productId);
-      if (restock.length > 0) {
-        const values = sql.join(restock.map((row) => sql`(${row.productId}::uuid, ${row.quantity}::int)`), sql`, `);
-        await tx.execute(sql`update ${products} set stock = ${products.stock} + v.qty, updated_at = now() from (values ${values}) as v(id, qty) where ${products.id} = v.id`);
+        .groupBy(orderItems.orderId, orderItems.productId);
+      const totals = new Map<string, number>();
+      for (const line of lines) totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.quantity);
+      if (totals.size > 0) {
+        const values = sql.join([...totals].map(([productId, quantity]) => sql`(${productId}::uuid, ${quantity}::int)`), sql`, `);
+        const finals = await tx.execute<{ id: string; stock: number }>(sql`update ${products} set stock = ${products.stock} + v.qty, updated_at = now() from (values ${values}) as v(id, qty) where ${products.id} = v.id returning ${products.id} as id, ${products.stock} as stock`);
+        // Walk lines backwards from each product's final stock to give every movement its own stockAfter.
+        const running = new Map<string, number>(finals.map((row) => [row.id, Number(row.stock)]));
+        const movements = [...lines].reverse().map((line) => {
+          const stockAfter = running.get(line.productId) ?? 0;
+          running.set(line.productId, stockAfter - line.quantity);
+          return { productId: line.productId, orderId: line.orderId, delta: line.quantity, stockAfter, reason: "cancellation" as const, actorEmail };
+        });
+        await tx.insert(stockMovements).values(movements);
       }
     }
 

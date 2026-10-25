@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { updateOrderStatusSchema } from "@application/dtos/order.dto";
 import { InvalidOrderTransitionError, updateOrderStatus } from "@application/use-cases/update-order-status";
-import { getSession } from "@lib/auth";
-import { recordAuthenticationFailure } from "@lib/security";
+import { authorize } from "@lib/authorize";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const session = await getSession();
-  if (!session) {
-    await recordAuthenticationFailure(request);
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const access = await authorize(request, "orders:write");
+  if ("response" in access) return access.response;
+  const session = access.session;
   const parsed = updateOrderStatusSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
