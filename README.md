@@ -140,6 +140,8 @@ La plantilla local [`.env.preview`](./.env.preview) contiene marcadores, no cred
 
 En Vercel, `NODE_ENV` permanece en `production` también para Preview; el control usa explícitamente `APP_ENV` y `VERCEL_ENV=preview`, y rechaza siempre `VERCEL_ENV=production`. Sin estas variables las rutas de evaluación permanecen cerradas. No asignes credenciales de producción a Preview ni apuntes su `DATABASE_URL` o Upstash a recursos de producción. La ruta de reset está pensada exclusivamente para datos sintéticos de esa instancia; requiere token en el encabezado `x-evaluation-reset-secret` y recrea seis pedidos/productos demo dentro de una transacción.
 
+En el dashboard, los administradores ven **Restablecer datos demo** solo en Vercel Preview cuando las rutas de evaluación y el secreto de reset están configurados. El botón confirma la acción y reinicia los pedidos/productos de evaluación; la autorización se valida en servidor y nunca expone el secreto al navegador.
+
 Antes de probar, aplica las migraciones **a la base aislada de Preview** desde un entorno seguro. El flujo de deploy actual migra sólo la base RDS de producción y no prepara la base Preview. Registra los callbacks OAuth exactos del dominio Preview (`https://DOMINIO-PREVIEW/api/auth/callback/google` y `/api/auth/callback/github`) en sus proveedores; no uses las apps OAuth de producción. La CI habilita las rutas únicamente en su servidor E2E local y usa PostgreSQL efímero; la prueba de reset no se ejecuta contra RDS.
 
 ### PostgreSQL compatible con RDS/AWS

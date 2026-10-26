@@ -3,6 +3,8 @@ import {
   evaluationApiDisabledResponse,
   evaluationResetAuthorizationResponse,
   isEvaluationApiEnabled,
+  isEvaluationPreviewEnabled,
+  isEvaluationResetConfigured,
 } from "../src/lib/evaluation-api";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -26,6 +28,23 @@ describe("evaluation API safeguards", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("EVALUATION_API_ENABLED", "false");
     expect(evaluationApiDisabledResponse()?.status).toBe(404);
+  });
+
+  it("only enables the reset control for a configured Vercel Preview", () => {
+    vi.stubEnv("APP_ENV", "evaluation");
+    vi.stubEnv("EVALUATION_API_ENABLED", "true");
+    vi.stubEnv("EVALUATION_RESET_SECRET", "evaluation-reset-secret-with-at-least-32-bytes");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(isEvaluationPreviewEnabled()).toBe(true);
+    expect(isEvaluationResetConfigured()).toBe(true);
+
+    vi.stubEnv("VERCEL_ENV", "");
+    expect(isEvaluationPreviewEnabled()).toBe(false);
+    vi.stubEnv("VERCEL_ENV", "production");
+    expect(isEvaluationPreviewEnabled()).toBe(false);
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("EVALUATION_RESET_SECRET", "short");
+    expect(isEvaluationResetConfigured()).toBe(false);
   });
 
   it("requires a dedicated, sufficiently long reset secret", () => {
