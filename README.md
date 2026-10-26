@@ -32,6 +32,8 @@ Contraseña: omnimarket
 
 El dashboard usa Google/GitHub OAuth en producción mediante Auth.js; el login demo con cookie firmada sólo está disponible en desarrollo. El tablero Kanban permite arrastrar tarjetas con mouse, touch o teclado; al soltar, el cambio se persiste mediante `PATCH /api/orders/:id/status` y se revierte si la API falla.
 
+Para la evaluación existe un conjunto de rutas de auditoría (`GET /api/test/analytics?page=1&limit=50`, `GET /api/test/kanban-status?orderNumber=OM-1001` y `POST /api/test/reset-data`). Están deshabilitadas por defecto y responden `404` fuera de un entorno habilitado con `APP_ENV=evaluation` y `EVALUATION_API_ENABLED=true`; si `NODE_ENV=production`, exigen además `VERCEL_ENV=preview`, y nunca se habilitan en Vercel Production. El reset exige el encabezado `x-evaluation-reset-secret` con `EVALUATION_RESET_SECRET` (mínimo 32 bytes aleatorios), reemplaza pedidos/productos/datos derivados en una transacción y conserva usuarios, sesiones OAuth y métricas API.
+
 Google y GitHub no vinculan cuentas automáticamente por coincidencia de correo (`allowDangerousEmailAccountLinking=false`). Si una persona ya tiene una cuenta OmniMarket con Google e intenta iniciar sesión con GitHub usando el mismo correo (o viceversa), Auth.js rechaza esa vinculación y requiere entrar con el proveedor ya asociado; el login explica este comportamiento. La aplicación aún no incluye un flujo explícito para enlazar proveedores. Al enlazarlos explícitamente en una versión futura, ambos métodos deberán autenticar al mismo usuario y conservar el mismo rol. La verificación local con credenciales de desarrollo completó el callback de Google y comprobó que GitHub con el mismo correo no se enlaza. El smoke test de producción comprueba que GitHub inicia OAuth, pero no completa un callback de usuario real.
 
 El tablero muestra skeletons mientras carga la información y permite seleccionar varios pedidos para actualizar su estado. La actualización en lote reutiliza la ruta auditada por pedido; si una o más operaciones fallan (por ejemplo, al cancelar pedidos enviados), el aviso informa cuáles no se cambiaron. Las operaciones exitosas no se revierten por fallos en otros pedidos.
@@ -90,7 +92,7 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
-La suite vigente contiene 29 pruebas unitarias, 28 de integración y 22 E2E (incluye verificación de overflow en móvil/tablet/desktop, menú móvil y el mensaje de cuenta OAuth ya vinculada). Las pruebas de integración requieren una base PostgreSQL aislada y migrada; nunca deben ejecutarse contra RDS de producción. Los callbacks OAuth se han probado con credenciales de desarrollo, no con las credenciales de producción. CI/deploy verifica el inicio OAuth de GitHub y la presencia de headers de rate limit; no completa callbacks de usuario ni prueba externamente el bloqueo por abuso.
+La suite vigente contiene 31 pruebas unitarias, 28 de integración y 23 E2E (incluye verificación de overflow en móvil/tablet/desktop, menú móvil, el mensaje de cuenta OAuth ya vinculada y el contrato de evaluación). Las pruebas de integración requieren una base PostgreSQL aislada y migrada; nunca deben ejecutarse contra RDS de producción. Los callbacks OAuth se han probado con credenciales de desarrollo, no con las credenciales de producción. CI/deploy verifica el inicio OAuth de GitHub y la presencia de headers de rate limit; no completa callbacks de usuario ni prueba externamente el bloqueo por abuso.
 
 ## Primer despliegue en Vercel
 
@@ -98,7 +100,7 @@ El proyecto incluye [vercel.json](./vercel.json) y usa el build nativo de Next.j
 
 1. Importa el repositorio y selecciona `OmniMarket` como **Root Directory**.
 2. Usa `pnpm` como package manager. El build configurado es `pnpm vercel-build`.
-3. Configura estas variables en **Settings → Environment Variables** para `Preview` y `Production`:
+3. Configura las variables de producción únicamente para el entorno `Production`:
 
 ```text
 DATABASE_URL
@@ -117,6 +119,28 @@ DB_POOL_MAX=1
 `AUTH_SECRET`, credenciales OAuth, credenciales Redis y `DATABASE_URL` deben configurarse como secretos reales. El acceso demo no debe habilitarse en producción. Configura callbacks OAuth para `https://TU-DOMINIO/api/auth/callback/google` y `https://TU-DOMINIO/api/auth/callback/github`; para desarrollo local, usa `http://localhost:3000/api/auth/callback/google` y `/api/auth/callback/github`.
 
 Upstash es obligatorio en producción: el middleware limita las APIs a 100 solicitudes/minuto/IP y `/api/analytics` añade 30 solicitudes/10 segundos/IP. Más de tres infracciones repetidas, más de 15 respuestas de autenticación fallida por minuto o tres rutas API desconocidas activan un bloqueo temporal de 24 horas. Sin las credenciales Redis, las APIs protegidas responden `503`. El proxy de entrada debe proporcionar `x-real-ip` confiable y sobrescribir cualquier valor enviado por el cliente; no se confía en `x-forwarded-for` en producción.
+
+### Entorno Preview de evaluación
+
+Para una presentación pública, usa un deployment **Preview** del mismo proyecto Vercel y crea recursos independientes de Production. Configura las variables bajo el alcance `Preview` (y, si procede, limita su alcance a la rama de evaluación):
+
+| Variable | Valor/criterio |
+|---|---|
+| `APP_ENV` | `evaluation` |
+| `EVALUATION_API_ENABLED` | `true` |
+| `EVALUATION_RESET_SECRET` | Secreto aleatorio de al menos 32 bytes; no reutilizar `AUTH_SECRET` |
+| `DATABASE_URL` | PostgreSQL aislado para evaluación, nunca la base de producción |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Instancia Redis separada de producción; ambas son obligatorias en Preview |
+| `AUTH_SECRET` | Secreto independiente de Preview |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | Aplicaciones OAuth de evaluación/desarrollo con callbacks del dominio Preview |
+| `AUTH_TRUST_HOST` | `true` |
+| `DB_POOL_MAX` | `1` |
+
+La plantilla local [`.env.preview`](./.env.preview) contiene marcadores, no credenciales listas para usar. Sustituye los marcadores con valores de recursos exclusivos de evaluación y copia las variables resultantes a Vercel → **Settings → Environment Variables → Preview**. El archivo está excluido de Git; no lo subas ni compartas. Vercel establece `VERCEL_ENV=preview` automáticamente.
+
+En Vercel, `NODE_ENV` permanece en `production` también para Preview; el control usa explícitamente `APP_ENV` y `VERCEL_ENV=preview`, y rechaza siempre `VERCEL_ENV=production`. Sin estas variables las rutas de evaluación permanecen cerradas. No asignes credenciales de producción a Preview ni apuntes su `DATABASE_URL` o Upstash a recursos de producción. La ruta de reset está pensada exclusivamente para datos sintéticos de esa instancia; requiere token en el encabezado `x-evaluation-reset-secret` y recrea seis pedidos/productos demo dentro de una transacción.
+
+Antes de probar, aplica las migraciones **a la base aislada de Preview** desde un entorno seguro. El flujo de deploy actual migra sólo la base RDS de producción y no prepara la base Preview. Registra los callbacks OAuth exactos del dominio Preview (`https://DOMINIO-PREVIEW/api/auth/callback/google` y `/api/auth/callback/github`) en sus proveedores; no uses las apps OAuth de producción. La CI habilita las rutas únicamente en su servidor E2E local y usa PostgreSQL efímero; la prueba de reset no se ejecuta contra RDS.
 
 ### PostgreSQL compatible con RDS/AWS
 
@@ -177,6 +201,8 @@ Vercel despliega desde Git. El flujo [`deploy.yml`](./.github/workflows/deploy.y
 | `createOrder` 1 línea / 50 líneas | 20 / 50 ms | 22 / 53 ms | 24 / 54 ms |
 
 Estas cifras no incluyen latencia de red a RDS ni Vercel y no constituyen un SLA. Optimizaciones derivadas: el descuento de stock de `createOrder` es una sola sentencia set-based (50 líneas: 213 → 50 ms) y la migración `0005` añade índices GIN `pg_trgm` para las búsquedas `ILIKE` (búsqueda de pedidos: 52 → 15 ms).
+
+La prueba E2E de aceptación mide `GET /api/test/analytics?page=1&limit=50` en cinco solicitudes secuenciales después del calentamiento inicial, sobre el PostgreSQL efímero de CI con los fixtures E2E, y exige menos de 300 ms tanto de ida y vuelta local como en `Server-Timing: app`. Es una comprobación del entorno de CI, no una medición de Vercel Preview, un percentil ni un SLA; la latencia pública debe verificarse una vez configurado el deployment aislado.
 
 Observabilidad: las rutas API emiten una línea JSON por respuesta con método, plantilla de ruta (sin IDs), status HTTP, resultado, duración, request ID y nivel. Las excepciones se vuelven a lanzar para preservar el manejo de errores de Next.js y solo se registra su tipo, nunca el mensaje, cuerpo, query string ni dirección IP. Las respuestas incluyen `X-Request-Id` y `Server-Timing` con la duración de la ruta; `/api/health` agrega el tiempo de la consulta PostgreSQL (`db;dur`) y `databaseLatencyMs`.
 

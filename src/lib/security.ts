@@ -30,6 +30,9 @@ export function isKnownApiPath(pathname: string) {
     || pathname === "/api/orders/status"
     || /^\/api\/orders\/[0-9a-f-]+$/i.test(pathname)
     || pathname === "/api/analytics"
+    || pathname === "/api/test/analytics"
+    || pathname === "/api/test/kanban-status"
+    || pathname === "/api/test/reset-data"
     || pathname === "/api/products"
     || pathname === "/api/exports/orders"
     || pathname === "/api/exports/products"
@@ -81,7 +84,7 @@ export async function checkApiRequest(request: NextRequest) {
   }
 
   const general = await generalLimiter.limit(ip);
-  const analytics = request.nextUrl.pathname === "/api/analytics"
+  const analytics = ["/api/analytics", "/api/test/analytics"].includes(request.nextUrl.pathname)
     ? await analyticsLimiter.limit(ip)
     : null;
   const result = analytics && !analytics.success ? analytics : general;

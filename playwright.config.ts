@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
+const port = new URL(baseURL).port || "3000";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -19,11 +20,13 @@ export default defineConfig({
     colorScheme: "light",
   },
   webServer: {
-    command: "node ./node_modules/next/dist/bin/next dev",
+    command: `node ./node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port ${port}`,
     url: `${baseURL}/login`,
     env: {
       AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-only-secret",
-      APP_ENV: process.env.APP_ENV ?? "development",
+      APP_ENV: "evaluation",
+      EVALUATION_API_ENABLED: "true",
+      EVALUATION_RESET_SECRET: "evaluation-reset-secret-for-ci-only",
       DEMO_EMAIL: process.env.DEMO_EMAIL ?? "demo@omnimarket.local",
       DEMO_PASSWORD: process.env.DEMO_PASSWORD ?? "omnimarket",
     },

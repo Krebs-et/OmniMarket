@@ -82,3 +82,44 @@ test("admin creates, adjusts and deactivates a product", async ({ page }) => {
   await row.getByRole("button", { name: /Desactivar/ }).click();
   await expect(page.getByRole("row", { name: new RegExp(sku) })).toHaveCount(0);
 });
+
+test("evaluation API paginates quickly and resets only the demo dataset", async ({ request }) => {
+  const firstPage = await request.get("/api/test/analytics?page=1&limit=2");
+  if (firstPage.status() === 404) test.skip(true, "Evaluation API is disabled in the reused local server");
+  expect(firstPage.ok(), await firstPage.text()).toBe(true);
+  const invalidPagination = await request.get("/api/test/analytics?page=0&limit=50");
+  expect(invalidPagination.status()).toBe(400);
+  const firstPageData = await firstPage.json();
+  expect(firstPageData).toMatchObject({ page: 1, limit: 2 });
+  expect(firstPageData.items).toHaveLength(2);
+  expect(firstPageData.total).toBeGreaterThanOrEqual(2);
+
+  for (let sample = 0; sample < 5; sample += 1) {
+    const startedAt = performance.now();
+    const response = await request.get("/api/test/analytics?page=1&limit=50");
+    expect(performance.now() - startedAt).toBeLessThan(300);
+    expect(response.ok(), await response.text()).toBe(true);
+    const appDuration = response.headers()["server-timing"]?.match(/(?:^|,\s*)app;dur=([\d.]+)/)?.[1];
+    expect(appDuration, "Expected an application duration in Server-Timing").toBeDefined();
+    expect(Number(appDuration)).toBeLessThan(300);
+  }
+
+  expect((await request.post("/api/test/reset-data")).status()).toBe(401);
+  const reset = await request.post("/api/test/reset-data", {
+    headers: { "x-evaluation-reset-secret": "evaluation-reset-secret-for-ci-only" },
+  });
+  expect(reset.ok(), await reset.text()).toBe(true);
+  await expect(reset.json()).resolves.toMatchObject({ status: "reset", orders: 6, products: 6 });
+  const repeatedReset = await request.post("/api/test/reset-data", {
+    headers: { "x-evaluation-reset-secret": "evaluation-reset-secret-for-ci-only" },
+  });
+  expect(repeatedReset.ok(), await repeatedReset.text()).toBe(true);
+  await expect(repeatedReset.json()).resolves.toMatchObject({ status: "reset", orders: 6, products: 6 });
+
+  const refreshedAnalytics = await request.get("/api/test/analytics?page=1&limit=50");
+  await expect(refreshedAnalytics.json()).resolves.toMatchObject({ total: 6, items: expect.arrayContaining([
+    expect.objectContaining({ orderNumber: "OM-1001" }),
+  ]) });
+  const kanbanStatus = await request.get("/api/test/kanban-status?orderNumber=OM-1001");
+  await expect(kanbanStatus.json()).resolves.toMatchObject({ orderNumber: "OM-1001", status: "PENDING" });
+});

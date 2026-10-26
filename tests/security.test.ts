@@ -17,8 +17,11 @@ describe("API security policy", () => {
     expect(isKnownApiPath("/api/products/not-a-uuid/stock")).toBe(false);
   });
 
-  it("does not treat proposed test-only endpoints as implemented routes", () => {
-    expect(isKnownApiPath("/api/test/reset-data")).toBe(false);
+  it("recognizes only the implemented evaluation routes", () => {
+    expect(isKnownApiPath("/api/test/analytics")).toBe(true);
+    expect(isKnownApiPath("/api/test/kanban-status")).toBe(true);
+    expect(isKnownApiPath("/api/test/reset-data")).toBe(true);
+    expect(isKnownApiPath("/api/test/other")).toBe(false);
     expect(isKnownApiPath("/api/orders/not-a-uuid/status")).toBe(false);
   });
 

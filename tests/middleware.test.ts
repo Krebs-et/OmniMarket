@@ -89,7 +89,7 @@ describe("middleware", () => {
     const store: Store = new Map();
     const middleware = await loadMiddleware({ ...production, ...redis }, store);
     const headers = { "x-real-ip": "198.51.100.4" };
-    for (let i = 0; i < 3; i++) expect((await middleware(request("/api/test/reset-data", headers))).status).toBe(404);
+    for (let i = 0; i < 3; i++) expect((await middleware(request("/api/test/not-a-route", headers))).status).toBe(404);
     expect(store.get("omnimarket:banned:198.51.100.4")).toBe("1");
     const banned = await middleware(request("/api/orders", headers));
     expect(banned.status).toBe(403);

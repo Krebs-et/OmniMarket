@@ -46,6 +46,9 @@ test("moves an order between Kanban columns and persists the status", async ({ p
   await page.reload();
   await page.getByLabel("Buscar pedidos").fill(orderNumber);
   await expect(page.locator(".kanban-column").nth(2).locator(".order-card").filter({ hasText: orderNumber })).toBeVisible();
+  const persistedStatus = await page.request.get(`/api/test/kanban-status?orderNumber=${encodeURIComponent(orderNumber)}`);
+  expect(persistedStatus.ok(), await persistedStatus.text()).toBe(true);
+  await expect(persistedStatus.json()).resolves.toMatchObject({ orderNumber, status: "PROCESSING" });
 });
 
 test("rejects unauthenticated API access", async ({ request }) => {
