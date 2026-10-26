@@ -335,6 +335,8 @@ h2 { font-size: 19px; letter-spacing: -0.02em; }
 .observability-alert-list li span:not(.observability-alert-mark), .observability-muted, .observability-footnote { color: var(--muted); font-size: 12px; }
 .observability-table-card { overflow: hidden; }
 .observability-table { min-width: 920px; }
+.observability-table tbody tr { cursor: default; }
+.observability-table tbody tr:hover { background: transparent; }
 .observability-route-method { color: var(--blue); font-size: 12px; font-weight: 700; }
 .observability-footnote { line-height: 1.5; margin-top: 14px; }
 .pagination { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: 13px; gap: 12px; justify-content: space-between; padding: 12px 14px; }
