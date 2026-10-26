@@ -1,0 +1,1 @@
+export const MAX_BULK_ORDER_UPDATES = 100;
