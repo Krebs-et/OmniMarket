@@ -7,6 +7,15 @@ export function isEvaluationApiEnabled() {
     && (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV === "preview");
 }
 
+export function isEvaluationPreviewEnabled() {
+  return process.env.VERCEL_ENV === "preview" && isEvaluationApiEnabled();
+}
+
+export function isEvaluationResetConfigured() {
+  const secret = process.env.EVALUATION_RESET_SECRET;
+  return Boolean(secret && Buffer.byteLength(secret) >= 32);
+}
+
 export function evaluationApiDisabledResponse() {
   return isEvaluationApiEnabled()
     ? null
@@ -18,7 +27,7 @@ export function evaluationResetAuthorizationResponse(request: Request) {
   if (disabledResponse) return disabledResponse;
 
   const expectedToken = process.env.EVALUATION_RESET_SECRET;
-  if (!expectedToken || Buffer.byteLength(expectedToken) < 32) {
+  if (!isEvaluationResetConfigured() || !expectedToken) {
     return Response.json({ error: "Evaluation reset is not configured" }, { status: 503 });
   }
 

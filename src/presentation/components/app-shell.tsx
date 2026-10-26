@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import type { Role } from "@domain/value-objects/role";
 import { RoleProvider } from "./role-context";
 import { Icon } from "./shared";
+import { EvaluationResetButton } from "./evaluation-reset-button";
 
 const sections: { href: Route; label: string; icon: string; admin?: boolean }[] = [
   { href: "/", label: "Resumen", icon: "grid" },
@@ -20,7 +21,7 @@ const sections: { href: Route; label: string; icon: string; admin?: boolean }[] 
 
 const roleLabels: Record<Role, string> = { admin: "Administrador", operator: "Operador", viewer: "Lectura" };
 
-export function AppShell({ userEmail, role, children }: { userEmail: string; role: Role; children: React.ReactNode }) {
+export function AppShell({ userEmail, role, children, showEvaluationReset = false }: { userEmail: string; role: Role; children: React.ReactNode; showEvaluationReset?: boolean }) {
   const pathname = usePathname();
   const visibleSections = sections.filter((section) => !section.admin || role === "admin");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,7 +49,11 @@ export function AppShell({ userEmail, role, children }: { userEmail: string; rol
         <nav className="main-nav" aria-label="Navegación principal">
           {visibleSections.map((section) => <Link key={section.href} className={`nav-item ${section === current ? "active" : ""}`} href={section.href} aria-current={section === current ? "page" : undefined}><Icon name={section.icon} />{section.label}</Link>)}
         </nav>
-        <div className="sidebar-bottom"><div className="online"><span /> Sistema operativo</div><button className="nav-item logout" onClick={logout}><Icon name="logout" />Cerrar sesión</button></div>
+        <div className="sidebar-bottom">
+          {showEvaluationReset && role === "admin" && <EvaluationResetButton />}
+          <div className="online"><span /> Sistema operativo</div>
+          <button className="nav-item logout" onClick={logout}><Icon name="logout" />Cerrar sesión</button>
+        </div>
       </aside>
       <main className="workspace">
         <header className="topbar">

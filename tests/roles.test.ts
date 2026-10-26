@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { can, parseRole } from "../src/domain/value-objects/role";
+import { bulkUpdateStatusSchema } from "../src/application/dtos/order.dto";
 
 describe("role permissions", () => {
   it("grants admins every permission", () => {
@@ -8,6 +9,14 @@ describe("role permissions", () => {
     }
     expect(can("operator", "observability:read")).toBe(false);
     expect(can("viewer", "observability:read")).toBe(false);
+  });
+
+  describe("bulk order status validation", () => {
+    it("accepts at most 100 unique orders per update", () => {
+      const ids = Array.from({ length: 100 }, (_, index) => `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`);
+      expect(bulkUpdateStatusSchema.safeParse({ ids, status: "CONFIRMED" }).success).toBe(true);
+      expect(bulkUpdateStatusSchema.safeParse({ ids: [...ids, "00000000-0000-4000-8000-000000000100"], status: "CONFIRMED" }).success).toBe(false);
+    });
   });
 
   it("lets operators manage orders but not the catalog", () => {

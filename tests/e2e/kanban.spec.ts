@@ -9,25 +9,24 @@ async function login(page: Page) {
   await expect(page.getByRole("region", { name: "Tablero Kanban de pedidos" })).toHaveAttribute("aria-busy", "false", { timeout: 25000 });
 }
 
-async function createPendingOrder(page: Page) {
+async function createPendingOrder(page: Page, customerName = `Pendiente E2E ${Date.now()}`) {
   const products = (await (await page.request.get("/api/products?limit=50")).json()).items.filter((product: { stock: number }) => product.stock > 5);
-  const response = await page.request.post("/api/orders", { data: { customerName: `Pendiente E2E ${Date.now()}`, items: [{ productId: products[0].id, quantity: 1 }] } });
+  const response = await page.request.post("/api/orders", { data: { customerName, items: [{ productId: products[0].id, quantity: 1 }] } });
   expect(response.ok(), await response.text()).toBe(true);
+  return response.json() as Promise<{ id: string; orderNumber: string }>;
 }
 
 test("moves an order between Kanban columns and persists the status", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Entrar al dashboard" }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await createPendingOrder(page);
+  await login(page);
+  const order = await createPendingOrder(page);
   await page.goto("/orders");
   await expect(page.getByRole("region", { name: "Tablero Kanban de pedidos" })).toHaveAttribute("aria-busy", "false", { timeout: 25000 });
 
   const pendingColumn = page.locator(".kanban-column").nth(0);
   const processingColumn = page.locator(".kanban-column").nth(2);
-  const card = pendingColumn.locator(".order-card").first();
+  const card = pendingColumn.locator(".order-card").filter({ hasText: order.orderNumber });
   await expect(card).toBeVisible();
-  const orderNumber = await card.locator(".order-number").innerText();
+  const orderNumber = order.orderNumber;
 
   await card.scrollIntoViewIfNeeded();
   await processingColumn.scrollIntoViewIfNeeded();
@@ -75,16 +74,68 @@ test("creates an order from the catalog", async ({ page }) => {
 
 test("updates multiple selected orders and reports the result", async ({ page }) => {
   await login(page);
-  for (const orderNumber of ["OM-1001", "OM-1002"]) {
-    await page.locator(".order-card").filter({ hasText: orderNumber }).getByRole("checkbox", { name: `Seleccionar ${orderNumber}` }).check();
+  const customerNames = [`Bulk E2E A ${Date.now()}`, `Bulk E2E B ${Date.now()}`];
+  const orders = await Promise.all(customerNames.map((name) => createPendingOrder(page, name)));
+  await page.reload();
+  for (const order of orders) {
+    await page.locator(".order-card").filter({ hasText: order.orderNumber }).getByRole("checkbox", { name: `Seleccionar ${order.orderNumber}` }).check();
   }
   await page.getByLabel("Nuevo estado para selección").selectOption("CONFIRMED");
   await page.getByRole("button", { name: "Aplicar a selección" }).click();
 
   await expect(page.locator(".alert.success")).toContainText("2 pedidos actualizados correctamente.");
   const confirmedColumn = page.locator(".kanban-column").filter({ has: page.getByRole("heading", { name: "Confirmados" }) });
-  await expect(confirmedColumn.locator(".order-card").filter({ hasText: "OM-1001" })).toBeVisible();
-  await expect(confirmedColumn.locator(".order-card").filter({ hasText: "OM-1002" })).toBeVisible();
+  for (const order of orders) {
+    await expect(confirmedColumn.locator(".order-card").filter({ hasText: order.orderNumber })).toBeVisible();
+  }
+});
+
+test("reports each order that fails a bulk status update", async ({ page }) => {
+  await login(page);
+  const pendingName = `Bulk pending E2E ${Date.now()}`;
+  const shippedName = `Bulk shipped E2E ${Date.now()}`;
+  const pending = await createPendingOrder(page, pendingName);
+  const shipped = await createPendingOrder(page, shippedName);
+  const shipResponse = await page.request.patch(`/api/orders/${shipped.id}/status`, { data: { status: "SHIPPED" } });
+  expect(shipResponse.ok(), await shipResponse.text()).toBe(true);
+  await page.reload();
+  for (const order of [pending, shipped]) {
+    await page.locator(".order-card").filter({ hasText: order.orderNumber }).getByRole("checkbox", { name: `Seleccionar ${order.orderNumber}` }).check();
+  }
+  await page.getByLabel("Nuevo estado para selección").selectOption("CANCELLED");
+  await page.getByRole("button", { name: "Aplicar a selección" }).click();
+
+  await expect(page.locator(".alert.success")).toContainText("1 de 2 pedidos actualizados correctamente.");
+  await expect(page.locator(".alert.error")).toContainText("1 pedido no se pudo actualizar.");
+  const failures = page.locator(".bulk-failure-details");
+  await failures.locator("summary").click();
+  await expect(failures).toContainText(shipped.orderNumber);
+  await expect(failures).toContainText("Orders shipped or delivered cannot be cancelled");
+});
+
+test("keeps only the drag overlay visible when dragging a card outside the board", async ({ page }) => {
+  await login(page);
+  const created = await createPendingOrder(page, `Drag outside E2E ${Date.now()}`);
+  await page.reload();
+  const card = page.locator(".kanban-column").nth(0).locator(".order-card").filter({ hasText: created.orderNumber });
+  await card.scrollIntoViewIfNeeded();
+  const box = await card.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) throw new Error("Kanban card or viewport is unavailable");
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 14, box.y + box.height / 2 + 14, { steps: 5 });
+  await expect(card).toHaveClass(/is-drag-source/);
+  await expect(card).toBeHidden();
+  const overlay = page.locator(".order-card.is-drag-overlay");
+  await expect(overlay).toBeVisible();
+  await page.mouse.move(8, viewport.height - 8, { steps: 5 });
+  await expect(overlay).toBeVisible();
+  await page.mouse.up();
+
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".kanban-column").nth(0).locator(".order-card").filter({ hasText: created.orderNumber })).toBeVisible();
 });
 
 test("opens order activity history", async ({ page }) => {
@@ -112,14 +163,19 @@ test("opens order activity history", async ({ page }) => {
 
 test("searches, switches to the table, sorts and paginates", async ({ page }) => {
   await login(page);
+  const created = await createPendingOrder(page, `Table E2E ${Date.now()}`);
+  const confirmed = await page.request.patch(`/api/orders/${created.id}/status`, { data: { status: "CONFIRMED" } });
+  expect(confirmed.ok(), await confirmed.text()).toBe(true);
+  await page.reload();
   await page.getByRole("tab", { name: "Tabla" }).click();
   const rows = page.locator(".orders-table tbody tr");
   await expect(rows.first()).toBeVisible();
   await page.getByRole("button", { name: /^Total/ }).click();
   await expect(page.getByRole("columnheader", { name: /Total/ })).toHaveAttribute("aria-sort", "descending");
   await page.getByLabel("Filtrar por estado").selectOption("CONFIRMED");
-  await expect(rows.first().locator(".status-chip")).toHaveText("Confirmado");
-  await page.getByLabel("Buscar pedidos").fill("OM-1001");
+  const createdRow = rows.filter({ hasText: created.orderNumber });
+  await expect(createdRow.locator(".status-chip")).toHaveText("Confirmado");
+  await page.getByLabel("Buscar pedidos").fill(created.orderNumber);
   await expect(rows).toHaveCount(1);
   await expect(page.locator(".pagination")).toContainText("1 pedidos");
 });

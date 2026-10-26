@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ORDER_STATUSES } from "@domain/value-objects/order-status";
+import { MAX_BULK_ORDER_UPDATES } from "@domain/value-objects/order-limits";
 
 export const updateOrderStatusSchema = z.object({
   status: z.enum(ORDER_STATUSES),
@@ -18,7 +19,7 @@ export const listOrdersQuerySchema = paginationSchema.extend({
 });
 
 export const bulkUpdateStatusSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, "Duplicate order ids"),
+  ids: z.array(z.string().uuid()).min(1).max(MAX_BULK_ORDER_UPDATES).refine((ids) => new Set(ids).size === ids.length, "Duplicate order ids"),
   status: z.enum(ORDER_STATUSES),
 });
 
